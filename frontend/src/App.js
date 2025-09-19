@@ -255,6 +255,9 @@ const ExamPlatform = () => {
     console.log("Rendering ExamInterface with", questions.length, "questions");
     return <ExamInterface questions={questions} currentQuestion={currentQuestion} setCurrentQuestion={setCurrentQuestion} answers={answers} setAnswers={setAnswers} />;
   }
+
+  // Show exam info page before starting exam
+  if (!examStarted) {
     return (
       <div className="exam-platform">
         <div className="exam-info-card">
