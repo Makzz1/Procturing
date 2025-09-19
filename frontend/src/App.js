@@ -326,6 +326,17 @@ const ExamPlatform = () => {
     );
   }
 
+  // Loading state when exam is started but questions not loaded yet
+  return (
+    <div className="exam-platform">
+      <div className="exam-info-card">
+        <h1>Loading Exam...</h1>
+        <p>Please wait while we prepare your questions.</p>
+      </div>
+    </div>
+  );
+};
+
   // Enhanced Exam Interface Component with Monitoring
 const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers, setAnswers }) => {
   const [violations, setViolations] = useState([]);
