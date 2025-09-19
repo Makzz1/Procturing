@@ -245,11 +245,16 @@ const ExamPlatform = () => {
     }
   };
 
+  console.log("ExamPlatform render - deviceCheckPassed:", deviceCheckPassed, "examStarted:", examStarted, "questions:", questions.length);
+
   if (!deviceCheckPassed) {
     return <DeviceCheck onCheckComplete={handleDeviceCheckComplete} />;
   }
 
-  if (!examStarted) {
+  if (examStarted && questions.length > 0) {
+    console.log("Rendering ExamInterface with", questions.length, "questions");
+    return <ExamInterface questions={questions} currentQuestion={currentQuestion} setCurrentQuestion={setCurrentQuestion} answers={answers} setAnswers={setAnswers} />;
+  }
     return (
       <div className="exam-platform">
         <div className="exam-info-card">
