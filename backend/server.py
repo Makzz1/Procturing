@@ -195,6 +195,9 @@ async def device_check(check_data: DeviceCheckResult):
 @api_router.get("/admin/device-checks")
 async def get_device_checks():
     checks = await db.device_checks.find().sort("check_timestamp", -1).to_list(100)
+    # Remove MongoDB _id field to avoid serialization issues
+    for check in checks:
+        check.pop('_id', None)
     return checks
 
 # Include the router in the main app
