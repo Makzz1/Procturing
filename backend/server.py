@@ -155,7 +155,7 @@ async def get_all_questions():
     questions = await db.questions.find().to_list(1000)
     return [Question(**question) for question in questions]
 
-@api_router.get("/questions", response_model=List[Question])
+@api_router.get("/questions")
 async def get_exam_questions():
     # Get 50 random questions for exam
     pipeline = [{"$sample": {"size": 50}}]
@@ -163,7 +163,8 @@ async def get_exam_questions():
     # Don't return correct answers to students
     for q in questions:
         q.pop('correct_answer', None)
-    return [Question(**question) for question in questions]
+        q.pop('_id', None)  # Remove MongoDB _id field
+    return questions
 
 @api_router.delete("/admin/questions/{question_id}")
 async def delete_question(question_id: str):
