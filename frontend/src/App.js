@@ -302,8 +302,403 @@ const ExamPlatform = () => {
     );
   }
 
-  // Enhanced Exam Interface with Monitoring
-  return <ExamInterface questions={questions} currentQuestion={currentQuestion} setCurrentQuestion={setCurrentQuestion} answers={answers} setAnswers={setAnswers} />;
+  // Enhanced Exam Interface Component with Monitoring
+const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers, setAnswers }) => {
+  const [violations, setViolations] = useState([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mediaStream, setMediaStream] = useState(null);
+  const [isMonitoring, setIsMonitoring] = useState(false);
+  const videoRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const [timeRemaining, setTimeRemaining] = useState(7200); // 2 hours in seconds
+
+  // Function to log violations (API call commented out)
+  const logViolation = async (violationType, details) => {
+    const violation = {
+      type: violationType,
+      details: details,
+      timestamp: new Date().toISOString(),
+      questionNumber: currentQuestion + 1
+    };
+    
+    setViolations(prev => [...prev, violation]);
+    
+    // TODO: Uncomment when backend is ready
+    /*
+    try {
+      await axios.post(`${API}/exam/logs`, {
+        log_id: `violation_${Date.now()}`,
+        reason: `${violationType}: ${details}`,
+        student_id: "student_" + Date.now(),
+        exam_session_id: "session_" + Date.now(),
+        video_url: "placeholder_video_url"
+      });
+    } catch (error) {
+      console.error("Failed to log violation:", error);
+    }
+    */
+    
+    console.log("🚨 VIOLATION DETECTED:", violation);
+  };
+
+  // Initialize monitoring on component mount
+  useEffect(() => {
+    initializeMonitoring();
+    return () => {
+      cleanupMonitoring();
+    };
+  }, []);
+
+  // Timer countdown
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 0) {
+          clearInterval(timer);
+          // Auto-submit exam when time is up
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const initializeMonitoring = async () => {
+    try {
+      // 1. Request fullscreen
+      await requestFullscreen();
+      
+      // 2. Start video/audio capture
+      await startMediaCapture();
+      
+      // 3. Set up window focus monitoring
+      setupWindowFocusMonitoring();
+      
+      // 4. Set up tab visibility monitoring
+      setupTabVisibilityMonitoring();
+      
+      // 5. Set up clipboard monitoring
+      setupClipboardMonitoring();
+      
+      // 6. Set up keyboard shortcuts blocking
+      setupKeyboardBlocking();
+      
+      setIsMonitoring(true);
+      
+    } catch (error) {
+      console.error("Failed to initialize monitoring:", error);
+      logViolation("MONITORING_INIT_FAILED", error.message);
+    }
+  };
+
+  const requestFullscreen = async () => {
+    try {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        await elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        await elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        await elem.msRequestFullscreen();
+      }
+      setIsFullscreen(true);
+      
+      // Monitor fullscreen changes
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.addEventListener('msfullscreenchange', handleFullscreenChange);
+      
+    } catch (error) {
+      logViolation("FULLSCREEN_DENIED", "User denied fullscreen access");
+    }
+  };
+
+  const handleFullscreenChange = () => {
+    const isCurrentlyFullscreen = !!(
+      document.fullscreenElement || 
+      document.webkitFullscreenElement || 
+      document.msFullscreenElement
+    );
+    
+    setIsFullscreen(isCurrentlyFullscreen);
+    
+    if (!isCurrentlyFullscreen) {
+      logViolation("FULLSCREEN_EXITED", "User exited fullscreen mode");
+    }
+  };
+
+  const startMediaCapture = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 },
+        audio: true
+      });
+      
+      setMediaStream(stream);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      
+      // Start recording
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9'
+      });
+      
+      const chunks = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        // TODO: Upload video blob to server
+        console.log("📹 Video recorded:", blob);
+      };
+      
+      mediaRecorder.start(10000); // Record in 10-second chunks
+      mediaRecorderRef.current = mediaRecorder;
+      
+    } catch (error) {
+      logViolation("MEDIA_ACCESS_DENIED", "Camera/microphone access denied");
+    }
+  };
+
+  const setupWindowFocusMonitoring = () => {
+    const handleBlur = () => {
+      logViolation("WINDOW_FOCUS_LOST", "User switched to another window/application");
+    };
+    
+    const handleFocus = () => {
+      console.log("✅ Window focus regained");
+    };
+    
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+  };
+
+  const setupTabVisibilityMonitoring = () => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        logViolation("TAB_HIDDEN", "User switched to another tab or minimized browser");
+      } else {
+        console.log("✅ Tab is visible again");
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  };
+
+  const setupClipboardMonitoring = () => {
+    const handlePaste = async (e) => {
+      try {
+        const clipboardText = await navigator.clipboard.readText();
+        if (clipboardText && clipboardText.length > 10) {
+          logViolation("CLIPBOARD_PASTE", `Pasted content: "${clipboardText.substring(0, 100)}..."`);
+        }
+      } catch (error) {
+        // Clipboard access might be restricted
+        logViolation("CLIPBOARD_ACTIVITY", "Paste detected but content could not be read");
+      }
+    };
+    
+    const handleCopy = () => {
+      logViolation("CLIPBOARD_COPY", "User copied content from the exam");
+    };
+    
+    document.addEventListener('paste', handlePaste);
+    document.addEventListener('copy', handleCopy);
+  };
+
+  const setupKeyboardBlocking = () => {
+    const handleKeyDown = (e) => {
+      // Block common shortcuts
+      const blockedKeys = [
+        // Alt+Tab (though this might not work in all browsers)
+        (e.altKey && e.key === 'Tab'),
+        // Ctrl+T (new tab)
+        (e.ctrlKey && e.key === 't'),
+        // Ctrl+N (new window)
+        (e.ctrlKey && e.key === 'n'),
+        // Ctrl+W (close tab)
+        (e.ctrlKey && e.key === 'w'),
+        // F12 (developer tools)
+        (e.key === 'F12'),
+        // Ctrl+Shift+I (developer tools)
+        (e.ctrlKey && e.shiftKey && e.key === 'I'),
+        // Ctrl+U (view source)
+        (e.ctrlKey && e.key === 'u'),
+        // F5 (refresh)
+        (e.key === 'F5'),
+        // Ctrl+R (refresh)
+        (e.ctrlKey && e.key === 'r')
+      ];
+      
+      if (blockedKeys.some(blocked => blocked)) {
+        e.preventDefault();
+        e.stopPropagation();
+        logViolation("BLOCKED_SHORTCUT", `Attempted to use: ${e.key} ${e.ctrlKey ? '+ Ctrl' : ''} ${e.altKey ? '+ Alt' : ''} ${e.shiftKey ? '+ Shift' : ''}`);
+        return false;
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown, true);
+  };
+
+  const cleanupMonitoring = () => {
+    // Stop media recording
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    
+    // Stop media stream
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+    }
+    
+    // Exit fullscreen
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getViolationColor = (type) => {
+    switch (type) {
+      case 'WINDOW_FOCUS_LOST':
+      case 'TAB_HIDDEN':
+        return 'bg-red-100 border-red-500 text-red-700';
+      case 'CLIPBOARD_PASTE':
+      case 'CLIPBOARD_COPY':
+        return 'bg-orange-100 border-orange-500 text-orange-700';
+      case 'BLOCKED_SHORTCUT':
+        return 'bg-yellow-100 border-yellow-500 text-yellow-700';
+      default:
+        return 'bg-gray-100 border-gray-500 text-gray-700';
+    }
+  };
+
+  return (
+    <div className="exam-interface-enhanced">
+      {/* Monitoring Status Bar */}
+      <div className="monitoring-status">
+        <div className="status-indicators">
+          <span className={`status-indicator ${isFullscreen ? 'active' : 'inactive'}`}>
+            🖥️ Fullscreen: {isFullscreen ? 'ON' : 'OFF'}
+          </span>
+          <span className={`status-indicator ${mediaStream ? 'active' : 'inactive'}`}>
+            📹 Camera: {mediaStream ? 'ON' : 'OFF'}
+          </span>
+          <span className={`status-indicator ${isMonitoring ? 'active' : 'inactive'}`}>
+            🔍 Monitoring: {isMonitoring ? 'ACTIVE' : 'INACTIVE'}
+          </span>
+          <span className="violation-count">
+            ⚠️ Violations: {violations.length}
+          </span>
+        </div>
+      </div>
+
+      {/* Main Exam Header */}
+      <div className="exam-header">
+        <h2>Question {currentQuestion + 1} of {questions.length}</h2>
+        <div className={`timer ${timeRemaining < 300 ? 'timer-warning' : ''}`}>
+          Time Remaining: {formatTime(timeRemaining)}
+        </div>
+      </div>
+
+      {/* Hidden Video Element for Monitoring */}
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        className="monitoring-video"
+        style={{ display: 'none' }}
+      />
+
+      {/* Question Display */}
+      {questions.length > 0 && questions[currentQuestion] && (
+        <div className="question-container">
+          <h3 className="question-text">{questions[currentQuestion].question_text}</h3>
+          <div className="options">
+            {['option_a', 'option_b', 'option_c', 'option_d'].map((option, index) => (
+              <label key={option} className="option-label">
+                <input
+                  type="radio"
+                  name={`question_${currentQuestion}`}
+                  value={String.fromCharCode(65 + index)} // A, B, C, D
+                  checked={answers[currentQuestion] === String.fromCharCode(65 + index)}
+                  onChange={(e) => setAnswers({...answers, [currentQuestion]: e.target.value})}
+                />
+                <span>{String.fromCharCode(65 + index)}. {questions[currentQuestion][option]}</span>
+              </label>
+            ))}
+          </div>
+          <div className="navigation-buttons">
+            <button 
+              onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
+              disabled={currentQuestion === 0}
+            >
+              Previous
+            </button>
+            <button 
+              onClick={() => setCurrentQuestion(Math.min(questions.length - 1, currentQuestion + 1))}
+              disabled={currentQuestion === questions.length - 1}
+            >
+              Next
+            </button>
+            {currentQuestion === questions.length - 1 && (
+              <button className="submit-exam-button">
+                Submit Exam
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Violations Log (for testing - remove in production) */}
+      {violations.length > 0 && (
+        <div className="violations-log">
+          <h4>Security Violations Detected:</h4>
+          <div className="violations-list">
+            {violations.slice(-5).map((violation, index) => (
+              <div key={index} className={`violation-item ${getViolationColor(violation.type)}`}>
+                <div className="violation-header">
+                  <span className="violation-type">{violation.type}</span>
+                  <span className="violation-time">{new Date(violation.timestamp).toLocaleTimeString()}</span>
+                </div>
+                <div className="violation-details">{violation.details}</div>
+                <div className="violation-question">Question: {violation.questionNumber}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Warning Messages */}
+      {!isFullscreen && (
+        <div className="warning-overlay">
+          <div className="warning-message">
+            ⚠️ Please return to fullscreen mode to continue the exam
+            <button onClick={requestFullscreen} className="retry-fullscreen">
+              Return to Fullscreen
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 };
 
 // Admin Login Component
