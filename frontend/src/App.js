@@ -775,7 +775,6 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
     </div>
   );
 };
-};
 
 // Admin Login Component
 const AdminLogin = ({ onLogin }) => {
