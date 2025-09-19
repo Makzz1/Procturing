@@ -312,6 +312,8 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
   const mediaRecorderRef = useRef(null);
   const [timeRemaining, setTimeRemaining] = useState(7200); // 2 hours in seconds
 
+  console.log("ExamInterface: questions =", questions, "currentQuestion =", currentQuestion);
+
   // Function to log violations (API call commented out)
   const logViolation = async (violationType, details) => {
     const violation = {
@@ -343,6 +345,7 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
 
   // Initialize monitoring on component mount
   useEffect(() => {
+    console.log("ExamInterface: Initializing monitoring...");
     initializeMonitoring();
     return () => {
       cleanupMonitoring();
@@ -367,29 +370,36 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
 
   const initializeMonitoring = async () => {
     try {
-      // 1. Request fullscreen
-      await requestFullscreen();
+      console.log("Starting monitoring initialization...");
       
-      // 2. Start video/audio capture
-      await startMediaCapture();
+      // 1. Request fullscreen (but don't fail if denied)
+      try {
+        await requestFullscreen();
+      } catch (e) {
+        console.log("Fullscreen denied, continuing...");
+      }
       
-      // 3. Set up window focus monitoring
+      // 2. Start video/audio capture (but don't fail if denied)
+      try {
+        await startMediaCapture();
+      } catch (e) {
+        console.log("Media access denied, continuing...");
+      }
+      
+      // 3. Set up monitoring (these shouldn't fail)
       setupWindowFocusMonitoring();
-      
-      // 4. Set up tab visibility monitoring
       setupTabVisibilityMonitoring();
-      
-      // 5. Set up clipboard monitoring
       setupClipboardMonitoring();
-      
-      // 6. Set up keyboard shortcuts blocking
       setupKeyboardBlocking();
       
       setIsMonitoring(true);
+      console.log("✅ Monitoring initialized successfully");
       
     } catch (error) {
       console.error("Failed to initialize monitoring:", error);
       logViolation("MONITORING_INIT_FAILED", error.message);
+      // Continue anyway - don't break the exam
+      setIsMonitoring(true);
     }
   };
 
@@ -412,6 +422,7 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       
     } catch (error) {
       logViolation("FULLSCREEN_DENIED", "User denied fullscreen access");
+      throw error;
     }
   };
 
@@ -466,6 +477,7 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       
     } catch (error) {
       logViolation("MEDIA_ACCESS_DENIED", "Camera/microphone access denied");
+      throw error;
     }
   };
 
@@ -551,6 +563,7 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
   };
 
   const cleanupMonitoring = () => {
+    console.log("Cleaning up monitoring...");
     // Stop media recording
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
@@ -563,7 +576,7 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
     
     // Exit fullscreen
     if (document.exitFullscreen) {
-      document.exitFullscreen();
+      document.exitFullscreen().catch(e => console.log("Error exiting fullscreen:", e));
     }
   };
 
@@ -588,6 +601,36 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
         return 'bg-gray-100 border-gray-500 text-gray-700';
     }
   };
+
+  // Error boundaries - if no questions, show loading
+  if (!questions || questions.length === 0) {
+    return (
+      <div className="exam-interface-enhanced">
+        <div className="monitoring-status">
+          <div className="status-indicators">
+            <span className="status-indicator inactive">Loading questions...</span>
+          </div>
+        </div>
+        <div className="loading-container">
+          <h2>Loading Exam Questions...</h2>
+          <p>Please wait while we prepare your exam.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQ = questions[currentQuestion];
+  if (!currentQ) {
+    return (
+      <div className="exam-interface-enhanced">
+        <div className="error-container">
+          <h2>Error Loading Question</h2>
+          <p>Question {currentQuestion + 1} could not be loaded.</p>
+          <button onClick={() => setCurrentQuestion(0)}>Return to First Question</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="exam-interface-enhanced">
@@ -627,44 +670,42 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       />
 
       {/* Question Display */}
-      {questions.length > 0 && questions[currentQuestion] && (
-        <div className="question-container">
-          <h3 className="question-text">{questions[currentQuestion].question_text}</h3>
-          <div className="options">
-            {['option_a', 'option_b', 'option_c', 'option_d'].map((option, index) => (
-              <label key={option} className="option-label">
-                <input
-                  type="radio"
-                  name={`question_${currentQuestion}`}
-                  value={String.fromCharCode(65 + index)} // A, B, C, D
-                  checked={answers[currentQuestion] === String.fromCharCode(65 + index)}
-                  onChange={(e) => setAnswers({...answers, [currentQuestion]: e.target.value})}
-                />
-                <span>{String.fromCharCode(65 + index)}. {questions[currentQuestion][option]}</span>
-              </label>
-            ))}
-          </div>
-          <div className="navigation-buttons">
-            <button 
-              onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
-              disabled={currentQuestion === 0}
-            >
-              Previous
-            </button>
-            <button 
-              onClick={() => setCurrentQuestion(Math.min(questions.length - 1, currentQuestion + 1))}
-              disabled={currentQuestion === questions.length - 1}
-            >
-              Next
-            </button>
-            {currentQuestion === questions.length - 1 && (
-              <button className="submit-exam-button">
-                Submit Exam
-              </button>
-            )}
-          </div>
+      <div className="question-container">
+        <h3 className="question-text">{currentQ.question_text}</h3>
+        <div className="options">
+          {['option_a', 'option_b', 'option_c', 'option_d'].map((option, index) => (
+            <label key={option} className="option-label">
+              <input
+                type="radio"
+                name={`question_${currentQuestion}`}
+                value={String.fromCharCode(65 + index)} // A, B, C, D
+                checked={answers[currentQuestion] === String.fromCharCode(65 + index)}
+                onChange={(e) => setAnswers({...answers, [currentQuestion]: e.target.value})}
+              />
+              <span>{String.fromCharCode(65 + index)}. {currentQ[option]}</span>
+            </label>
+          ))}
         </div>
-      )}
+        <div className="navigation-buttons">
+          <button 
+            onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
+            disabled={currentQuestion === 0}
+          >
+            Previous
+          </button>
+          <button 
+            onClick={() => setCurrentQuestion(Math.min(questions.length - 1, currentQuestion + 1))}
+            disabled={currentQuestion === questions.length - 1}
+          >
+            Next
+          </button>
+          {currentQuestion === questions.length - 1 && (
+            <button className="submit-exam-button">
+              Submit Exam
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Violations Log (for testing - remove in production) */}
       {violations.length > 0 && (
@@ -686,7 +727,7 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       )}
 
       {/* Warning Messages */}
-      {!isFullscreen && (
+      {!isFullscreen && isMonitoring && (
         <div className="warning-overlay">
           <div className="warning-message">
             ⚠️ Please return to fullscreen mode to continue the exam
