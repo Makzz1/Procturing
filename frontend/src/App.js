@@ -302,47 +302,8 @@ const ExamPlatform = () => {
     );
   }
 
-  // Exam Interface (simplified for now)
-  return (
-    <div className="exam-interface">
-      <div className="exam-header">
-        <h2>Question {currentQuestion + 1} of {questions.length}</h2>
-        <div className="timer">Time Remaining: 1:59:59</div>
-      </div>
-      {questions.length > 0 && questions[currentQuestion] && (
-        <div className="question-container">
-          <h3 className="question-text">{questions[currentQuestion].question_text}</h3>
-          <div className="options">
-            {['option_a', 'option_b', 'option_c', 'option_d'].map((option, index) => (
-              <label key={option} className="option-label">
-                <input
-                  type="radio"
-                  name={`question_${currentQuestion}`}
-                  value={String.fromCharCode(65 + index)} // A, B, C, D
-                  onChange={(e) => setAnswers({...answers, [currentQuestion]: e.target.value})}
-                />
-                <span>{String.fromCharCode(65 + index)}. {questions[currentQuestion][option]}</span>
-              </label>
-            ))}
-          </div>
-          <div className="navigation-buttons">
-            <button 
-              onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
-              disabled={currentQuestion === 0}
-            >
-              Previous
-            </button>
-            <button 
-              onClick={() => setCurrentQuestion(Math.min(questions.length - 1, currentQuestion + 1))}
-              disabled={currentQuestion === questions.length - 1}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  // Enhanced Exam Interface with Monitoring
+  return <ExamInterface questions={questions} currentQuestion={currentQuestion} setCurrentQuestion={setCurrentQuestion} answers={answers} setAnswers={setAnswers} />;
 };
 
 // Admin Login Component
