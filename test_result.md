@@ -149,7 +149,7 @@ test_plan:
 
 agent_communication:
   - agent: "main"
-    message: "Implemented live audio speech detection system. Backend has new /api/exam/detect-speech endpoint using Silero VAD model. Frontend continuously records 5-second audio chunks and sends to backend. When speech detected, shows popup and logs violation. Ready for comprehensive testing of speech detection accuracy and frontend-backend integration."
+    message: "FIXED: Backend was crashing due to missing lazy_loader dependency. Converted backend from MongoDB to PostgreSQL/Supabase. Backend now properly starts with speech detection initialized. Audio detection system ready for testing - sends webm format audio to /api/exam/detect-speech endpoint, returns true/false, shows popup on speech detection."
 
 backend:
   - task: "Basic API Health Check"
