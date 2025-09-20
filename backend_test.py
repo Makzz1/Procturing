@@ -80,7 +80,7 @@ class ExamPlatformTester:
                 "username": "admin",
                 "password": "admin123"
             }
-            response = self.session.post(f"{API_URL}/admin/login", json=login_data)
+            response = self.session.post(f"{API_URL}/admin/login", data=login_data)
             
             if response.status_code == 200:
                 data = response.json()
