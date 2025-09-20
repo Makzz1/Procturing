@@ -400,8 +400,8 @@ class ExamPlatformTester:
             logs_before_response = self.session.get(f"{API_URL}/admin/logs")
             logs_before_count = len(logs_before_response.json()) if logs_before_response.status_code == 200 else 0
             
-            # Test with synthetic speech audio to trigger violation logging
-            audio_file_path = "/app/test_audio/synthetic_speech.wav"
+            # Test with human speech audio to trigger violation logging
+            audio_file_path = "/app/test_audio/human_speech.wav"
             
             if not os.path.exists(audio_file_path):
                 self.log_result("Speech Detection Violation Logging", False, f"Test audio file not found: {audio_file_path}")
