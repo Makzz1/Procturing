@@ -1,0 +1,339 @@
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from dotenv import load_dotenv
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+import logging
+from pathlib import Path
+from pydantic import BaseModel, Field
+from typing import List, Optional
+import uuid
+from datetime import datetime, timezone
+import hashlib
+from speech_detection import initialize_speech_detection, detect_speech_from_bytes
+
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+# MongoDB connection
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
+
+# Create the main app without a prefix
+app = FastAPI()
+
+# Create a router with the /api prefix
+api_router = APIRouter(prefix="/api")
+
+# Security
+security = HTTPBearer()
+
+# Define Models
+class StatusCheck(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    client_name: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class StatusCheckCreate(BaseModel):
+    client_name: str
+
+class Question(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    question_text: str
+    option_a: str
+    option_b: str
+    option_c: str
+    option_d: str
+    correct_answer: str  # A, B, C, or D
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class QuestionCreate(BaseModel):
+    question_text: str
+    option_a: str
+    option_b: str
+    option_c: str
+    option_d: str
+    correct_answer: str
+
+class Admin(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    username: str
+    password_hash: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AdminLogin(BaseModel):
+    username: str
+    password: str
+
+class ExamLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    log_id: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    video_url: Optional[str] = None
+    reason: str
+    student_id: Optional[str] = None
+    exam_session_id: Optional[str] = None
+
+class ExamLogCreate(BaseModel):
+    log_id: str
+    video_url: Optional[str] = None
+    reason: str
+    student_id: Optional[str] = None
+    exam_session_id: Optional[str] = None
+
+class DeviceCheckResult(BaseModel):
+    has_multiple_keyboards: bool
+    has_external_monitors: bool
+    keyboard_count: int
+    monitor_count: int
+    detected_devices: List[str]
+    check_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class VideoUpload(BaseModel):
+    student_id: str
+    exam_session_id: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    is_final: bool = False
+    file_size: int
+    file_name: str
+
+class SpeechDetectionResult(BaseModel):
+    speech_detected: bool
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    message: str
+
+# Helper functions
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password: str, hashed: str) -> bool:
+    return hash_password(password) == hashed
+
+# Initialize default admin if not exists
+async def init_default_admin():
+    admin_exists = await db.admins.find_one({"username": "admin"})
+    if not admin_exists:
+        default_admin = Admin(
+            username="admin",
+            password_hash=hash_password("admin123")
+        )
+        await db.admins.insert_one(default_admin.dict())
+        logger.info("Default admin created: username=admin, password=admin123")
+
+# Add your routes to the router instead of directly to app
+@api_router.get("/")
+async def root():
+    return {"message": "Secure Exam Platform API"}
+
+@api_router.post("/status", response_model=StatusCheck)
+async def create_status_check(input: StatusCheckCreate):
+    status_dict = input.dict()
+    status_obj = StatusCheck(**status_dict)
+    _ = await db.status_checks.insert_one(status_obj.dict())
+    return status_obj
+
+@api_router.get("/status", response_model=List[StatusCheck])
+async def get_status_checks():
+    status_checks = await db.status_checks.find().to_list(1000)
+    return [StatusCheck(**status_check) for status_check in status_checks]
+
+# Admin Authentication Routes
+@api_router.post("/admin/login")
+async def admin_login(credentials: AdminLogin):
+    admin = await db.admins.find_one({"username": credentials.username})
+    if not admin or not verify_password(credentials.password, admin["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Simple token (in production, use JWT)
+    token = str(uuid.uuid4())
+    await db.admin_sessions.insert_one({
+        "token": token,
+        "admin_id": admin["id"],
+        "created_at": datetime.now(timezone.utc)
+    })
+    
+    return {"token": token, "message": "Login successful"}
+
+# Question Management Routes
+@api_router.post("/admin/questions", response_model=Question)
+async def create_question(question: QuestionCreate):
+    question_obj = Question(**question.dict())
+    await db.questions.insert_one(question_obj.dict())
+    return question_obj
+
+@api_router.get("/admin/questions", response_model=List[Question])
+async def get_all_questions():
+    questions = await db.questions.find().to_list(1000)
+    return [Question(**question) for question in questions]
+
+@api_router.get("/questions")
+async def get_exam_questions():
+    # Get 50 random questions for exam
+    pipeline = [{"$sample": {"size": 50}}]
+    questions = await db.questions.aggregate(pipeline).to_list(50)
+    # Don't return correct answers to students
+    for q in questions:
+        q.pop('correct_answer', None)
+        q.pop('_id', None)  # Remove MongoDB _id field
+    return questions
+
+@api_router.delete("/admin/questions/{question_id}")
+async def delete_question(question_id: str):
+    result = await db.questions.delete_one({"id": question_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Question not found")
+    return {"message": "Question deleted successfully"}
+
+# Exam Logging Routes
+@api_router.post("/exam/logs", response_model=ExamLog)
+async def create_exam_log(log: ExamLogCreate):
+    log_obj = ExamLog(**log.dict())
+    await db.exam_logs.insert_one(log_obj.dict())
+    return log_obj
+
+@api_router.get("/admin/logs", response_model=List[ExamLog])
+async def get_exam_logs():
+    logs = await db.exam_logs.find().sort("timestamp", -1).to_list(1000)
+    return [ExamLog(**log) for log in logs]
+
+# Device Check Routes
+@api_router.post("/device/check", response_model=DeviceCheckResult)
+async def device_check(check_data: DeviceCheckResult):
+    # Store device check result
+    await db.device_checks.insert_one(check_data.dict())
+    return check_data
+
+@api_router.get("/admin/device-checks")
+async def get_device_checks():
+    checks = await db.device_checks.find().sort("check_timestamp", -1).to_list(100)
+    # Remove MongoDB _id field to avoid serialization issues
+    for check in checks:
+        check.pop('_id', None)
+    return checks
+
+# Video upload endpoint (commented out - ready for implementation)
+"""
+@api_router.post("/exam/upload-video")
+async def upload_video_chunk(
+    video: UploadFile = File(...),
+    student_id: str = Form(...),
+    exam_session_id: str = Form(...),
+    timestamp: str = Form(...),
+    is_final: str = Form(...)
+):
+    try:
+        # Create uploads directory if it doesn't exist
+        upload_dir = Path("uploads/videos")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        file_name = f"{student_id}_{exam_session_id}_{int(datetime.now().timestamp())}.webm"
+        file_path = upload_dir / file_name
+        
+        # Save video file
+        with open(file_path, "wb") as buffer:
+            content = await video.read()
+            buffer.write(content)
+        
+        # Log video upload
+        video_log = VideoUpload(
+            student_id=student_id,
+            exam_session_id=exam_session_id,
+            timestamp=datetime.fromisoformat(timestamp.replace('Z', '+00:00')),
+            is_final=is_final.lower() == 'true',
+            file_size=len(content),
+            file_name=file_name
+        )
+        
+        await db.video_uploads.insert_one(video_log.dict())
+        
+        return {
+            "message": "Video chunk uploaded successfully",
+            "file_name": file_name,
+            "file_size": len(content)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to upload video: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to upload video")
+"""
+
+# Speech Detection Route
+@api_router.post("/exam/detect-speech", response_model=SpeechDetectionResult)
+async def detect_speech_in_audio(
+    audio: UploadFile = File(...),
+    student_id: str = Form(...),
+    exam_session_id: str = Form(...),
+    timestamp: str = Form(...)
+):
+    try:
+        # Read audio data
+        audio_bytes = await audio.read()
+        logger.info(f"Received audio chunk: {len(audio_bytes)} bytes from student {student_id}")
+        
+        # Detect speech in the audio chunk
+        speech_detected = detect_speech_from_bytes(audio_bytes, audio.content_type or "audio/webm")
+        
+        result = SpeechDetectionResult(
+            speech_detected=speech_detected,
+            message="Human speech detected" if speech_detected else "No human speech detected"
+        )
+        
+        if speech_detected:
+            # Log the speech detection as a violation
+            violation_log = ExamLogCreate(
+                log_id=f"speech_detected_{int(datetime.now().timestamp())}",
+                reason="SPEECH_DETECTED: Human speech detected during exam",
+                student_id=student_id,
+                exam_session_id=exam_session_id
+            )
+            
+            # Save violation to database
+            try:
+                log_obj = ExamLog(**violation_log.dict())
+                await db.exam_logs.insert_one(log_obj.dict())
+                logger.info(f"Speech violation logged for student {student_id}")
+            except Exception as log_error:
+                logger.error(f"Failed to log speech violation: {log_error}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in speech detection endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Speech detection failed: {str(e)}")
+
+# Include the router in the main app
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup_event():
+    await init_default_admin()
+    # Initialize speech detection model
+    logger.info("Initializing speech detection model...")
+    success = initialize_speech_detection()
+    if success:
+        logger.info("✅ Speech detection model initialized successfully")
+    else:
+        logger.warning("⚠️ Speech detection model failed to initialize - feature will be disabled")
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
