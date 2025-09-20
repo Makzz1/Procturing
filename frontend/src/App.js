@@ -6,6 +6,137 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Face Capture Component
+const FaceCapture = ({ onCaptureComplete }) => {
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [stream, setStream] = useState(null);
+  const [capturedImage, setCapturedImage] = useState(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    startCamera();
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: 'user' },
+        audio: false
+      });
+      setStream(mediaStream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+    } catch (error) {
+      console.error('Failed to access camera:', error);
+    }
+  };
+
+  const capturePhoto = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    setIsCapturing(true);
+    
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    ctx.drawImage(video, 0, 0);
+    
+    // Convert to blob
+    canvas.toBlob(async (blob) => {
+      try {
+        const formData = new FormData();
+        formData.append('face_image', blob, `face_capture_${Date.now()}.jpg`);
+        formData.append('student_id', `student_${Date.now()}`);
+        formData.append('timestamp', new Date().toISOString());
+
+        // TODO: Uncomment when backend endpoint is ready
+        /*
+        const response = await axios.post(`${API}/exam/upload-face`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        console.log('📸 Face image uploaded:', response.data);
+        */
+        
+        console.log('📸 Face image captured and ready for upload:', blob.size, 'bytes');
+        setCapturedImage(canvas.toDataURL());
+        
+        // Stop camera after capture
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+        
+        onCaptureComplete(true);
+      } catch (error) {
+        console.error('Failed to upload face image:', error);
+        onCaptureComplete(false);
+      }
+      setIsCapturing(false);
+    }, 'image/jpeg', 0.8);
+  };
+
+  if (capturedImage) {
+    return (
+      <div className="face-capture-success">
+        <h3>✅ Face Captured Successfully!</h3>
+        <img src={capturedImage} alt="Captured face" className="captured-face-preview" />
+        <p>Proceeding to exam...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="face-capture-container">
+      <div className="face-capture-card">
+        <h2 className="text-2xl font-bold mb-4">Face Verification</h2>
+        <p className="mb-4 text-gray-600">
+          Please position your face in the center of the camera and look directly at the screen.
+        </p>
+        
+        <div className="camera-container">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="face-capture-video"
+          />
+          <div className="face-guide-overlay">
+            <div className="face-guide-circle"></div>
+            <div className="face-guide-text">Center your face here</div>
+          </div>
+        </div>
+        
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+        
+        <button
+          onClick={capturePhoto}
+          disabled={isCapturing}
+          className="capture-face-button"
+        >
+          {isCapturing ? "Capturing..." : "Capture Face"}
+        </button>
+        
+        <p className="capture-instructions">
+          Make sure you are looking directly at the camera and your face is clearly visible.
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // Device Detection Component
 const DeviceCheck = ({ onCheckComplete }) => {
   const [checking, setChecking] = useState(false);
