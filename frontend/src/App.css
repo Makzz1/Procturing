@@ -7,6 +7,122 @@
     sans-serif;
 }
 
+/* Face Capture Styles */
+.face-capture-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.face-capture-card {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 600px;
+  width: 100%;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.camera-container {
+  position: relative;
+  display: inline-block;
+  margin: 20px 0;
+}
+
+.face-capture-video {
+  width: 400px;
+  height: 300px;
+  border-radius: 12px;
+  border: 3px solid #4f46e5;
+  background: #000;
+}
+
+.face-guide-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.face-guide-circle {
+  width: 200px;
+  height: 200px;
+  border: 3px dashed #22c55e;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.1);
+  animation: pulse 2s infinite;
+}
+
+.face-guide-text {
+  position: absolute;
+  bottom: 20px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.capture-face-button {
+  background: #22c55e;
+  color: white;
+  padding: 16px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 20px 0;
+  transition: all 0.2s;
+}
+
+.capture-face-button:hover:not(:disabled) {
+  background: #16a34a;
+  transform: translateY(-1px);
+}
+
+.capture-face-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.capture-instructions {
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 10px;
+}
+
+.face-capture-success {
+  text-align: center;
+  padding: 2rem;
+}
+
+.face-capture-success h3 {
+  color: #22c55e;
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+.captured-face-preview {
+  width: 200px;
+  height: 150px;
+  border-radius: 8px;
+  border: 2px solid #22c55e;
+  margin: 20px 0;
+}
+
 /* Device Check Styles */
 .device-check-container {
   min-height: 100vh;
