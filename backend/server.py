@@ -324,6 +324,52 @@ async def get_device_checks():
         logger.error(f"Error getting device checks: {e}")
         raise HTTPException(status_code=500, detail="Failed to get device checks")
 
+# Speech Detection Route
+@api_router.post("/exam/detect-speech", response_model=SpeechDetectionResult)
+async def detect_speech_in_audio(
+    audio: UploadFile = File(...),
+    student_id: str = Form(...),
+    exam_session_id: str = Form(...),
+    timestamp: str = Form(...)
+):
+    try:
+        # Read audio data
+        audio_bytes = await audio.read()
+        logger.info(f"Received audio chunk: {len(audio_bytes)} bytes from student {student_id}")
+        
+        # Detect speech in the audio chunk
+        speech_detected = detect_speech_from_bytes(audio_bytes, audio.content_type or "audio/webm")
+        
+        result = SpeechDetectionResult(
+            speech_detected=speech_detected,
+            message="Human speech detected" if speech_detected else "No human speech detected"
+        )
+        
+        if speech_detected:
+            # Log the speech detection as a violation
+            violation_log = ExamLogCreate(
+                log_id=f"speech_detected_{int(datetime.now().timestamp())}",
+                reason="SPEECH_DETECTED: Human speech detected during exam",
+                student_id=student_id,
+                exam_session_id=exam_session_id
+            )
+            
+            # Save violation to database
+            try:
+                log_obj = ExamLog(**violation_log.dict())
+                log_data = log_obj.dict()
+                log_data['timestamp'] = log_data['timestamp'].isoformat()
+                supabase.table('exam_logs').insert(log_data).execute()
+                logger.info(f"Speech violation logged for student {student_id}")
+            except Exception as log_error:
+                logger.error(f"Failed to log speech violation: {log_error}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in speech detection endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Speech detection failed: {str(e)}")
+
 # Face capture endpoint (commented out - ready for implementation)
 """
 @api_router.post("/exam/upload-face")
