@@ -725,7 +725,7 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
     }
   };
 
-  // Function to upload audio chunks to backend
+  // Function to upload audio chunks to backend and check for speech
   const uploadAudioChunk = async (audioBlob) => {
     try {
       const formData = new FormData();
@@ -734,19 +734,28 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       formData.append('exam_session_id', `session_${Date.now()}`);
       formData.append('timestamp', new Date().toISOString());
 
-      // TODO: Uncomment when backend endpoint is ready
-      /*
-      const response = await axios.post(`${API}/exam/upload-audio`, formData, {
+      console.log(`🎤 Uploading audio chunk for speech detection (${audioBlob.size} bytes)`);
+      
+      const response = await axios.post(`${API}/exam/detect-speech`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-      console.log('🎤 Audio chunk uploaded:', response.data);
-      */
       
-      console.log(`🎤 Audio chunk ready for upload (${audioBlob.size} bytes)`);
+      console.log('🎤 Speech detection response:', response.data);
+      
+      // Handle speech detection result
+      if (response.data.speech_detected) {
+        // Show popup warning
+        showSpeechDetectedPopup();
+        
+        // Log as violation
+        logViolation("SPEECH_DETECTED", response.data.message);
+        console.log('🚨 SPEECH DETECTED - Violation logged');
+      }
+      
     } catch (error) {
-      console.error('Failed to upload audio chunk:', error);
+      console.error('Failed to upload audio chunk for speech detection:', error);
       logViolation("AUDIO_UPLOAD_FAILED", `Failed to upload audio: ${error.message}`);
     }
   };
