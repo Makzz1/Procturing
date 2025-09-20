@@ -945,10 +945,17 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       mediaRecorderRef.current.stop();
     }
     
+    // Stop audio recording for speech detection
+    if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+      audioRecorderRef.current.stop();
+    }
+    
     // Stop media stream
     if (mediaStream) {
       mediaStream.getTracks().forEach(track => track.stop());
     }
+    
+    setSpeechDetectionActive(false);
     
     // Exit fullscreen
     if (document.exitFullscreen) {
