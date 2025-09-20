@@ -1026,6 +1026,9 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
           <span className={`status-indicator ${mediaStream ? 'active' : 'inactive'}`}>
             📹 Camera: {mediaStream ? 'ON' : 'OFF'}
           </span>
+          <span className={`status-indicator ${speechDetectionActive ? 'active' : 'inactive'}`}>
+            🎤 Speech Detection: {speechDetectionActive ? 'ACTIVE' : 'INACTIVE'}
+          </span>
           <span className={`status-indicator ${isMonitoring ? 'active' : 'inactive'}`}>
             🔍 Monitoring: {isMonitoring ? 'ACTIVE' : 'INACTIVE'}
           </span>
