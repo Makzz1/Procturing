@@ -828,25 +828,51 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
   // Start separate audio recording
   const startAudioRecording = async () => {
     try {
+      console.log('🎤 Requesting microphone access for speech detection...');
       const audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000
+        },
         video: false
       });
+      
+      console.log('✅ Microphone access granted, starting audio recording...');
       
       const audioRecorder = new MediaRecorder(audioStream, {
         mimeType: 'audio/webm'
       });
       
       audioRecorder.ondataavailable = async (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
+          console.log(`🎤 Audio chunk available: ${event.data.size} bytes`);
           await uploadAudioChunk(event.data);
+        } else {
+          console.log('⚠️ Empty audio chunk received, skipping upload');
         }
+      };
+      
+      audioRecorder.onerror = (event) => {
+        console.error('❌ Audio recorder error:', event.error);
+        logViolation("AUDIO_RECORDER_ERROR", `Audio recording failed: ${event.error.name}`);
+        setSpeechDetectionActive(false);
+      };
+      
+      audioRecorder.onstart = () => {
+        console.log('✅ Audio recording started successfully');
+        setSpeechDetectionActive(true);
+      };
+      
+      audioRecorder.onstop = () => {
+        console.log('🛑 Audio recording stopped');
+        setSpeechDetectionActive(false);
       };
       
       audioRecorder.start(5000); // Record audio in 5-second chunks
       audioRecorderRef.current = audioRecorder;
-      setSpeechDetectionActive(true);
-      console.log('🎤 Audio recording started for speech detection');
+      
+      console.log('🎤 Audio recording initialized for speech detection');
       
     } catch (error) {
       console.error('❌ Failed to start audio recording:', error);
@@ -855,10 +881,24 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
         message: error.message,
         constraint: error.constraint
       });
-      logViolation("AUDIO_ACCESS_DENIED", `Audio access denied: ${error.message}`);
       
-      // Show user-friendly message
-      console.log('⚠️ Audio recording disabled due to browser security. Speech detection will not work.');
+      // Provide specific error messages for different scenarios
+      if (error.name === 'NotAllowedError') {
+        console.log('⚠️ Microphone access denied by user. Speech detection disabled.');
+        logViolation("AUDIO_ACCESS_DENIED", "User denied microphone access");
+      } else if (error.name === 'NotFoundError') {
+        console.log('⚠️ No microphone found. Speech detection disabled.');
+        logViolation("AUDIO_DEVICE_NOT_FOUND", "No microphone device available");
+      } else if (error.name === 'NotReadableError') {
+        console.log('⚠️ Microphone is being used by another application. Speech detection disabled.');
+        logViolation("AUDIO_DEVICE_BUSY", "Microphone in use by another application");
+      } else {
+        console.log('⚠️ Audio recording failed due to browser security or device issues. Speech detection disabled.');
+        logViolation("AUDIO_ACCESS_DENIED", `Audio access failed: ${error.message}`);
+      }
+      
+      // Ensure speech detection status reflects the failure
+      setSpeechDetectionActive(false);
     }
   };
   const uploadVideoChunk = async (videoBlob, isFinal = false) => {
