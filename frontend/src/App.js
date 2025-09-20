@@ -546,8 +546,10 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mediaStream, setMediaStream] = useState(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
+  const [speechDetectionActive, setSpeechDetectionActive] = useState(false);
   const videoRef = useRef(null);
   const mediaRecorderRef = useRef(null);
+  const audioRecorderRef = useRef(null);
   const [timeRemaining, setTimeRemaining] = useState(7200); // 2 hours in seconds
 
   console.log("ExamInterface: questions =", questions, "currentQuestion =", currentQuestion);
