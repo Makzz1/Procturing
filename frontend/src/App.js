@@ -975,6 +975,8 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       case 'WINDOW_FOCUS_LOST':
       case 'TAB_HIDDEN':
         return 'bg-red-100 border-red-500 text-red-700';
+      case 'SPEECH_DETECTED':
+        return 'bg-red-200 border-red-600 text-red-800';
       case 'CLIPBOARD_PASTE':
       case 'CLIPBOARD_COPY':
         return 'bg-orange-100 border-orange-500 text-orange-700';
