@@ -264,13 +264,13 @@ frontend:
     implemented: true
     working: false
     file: "/app/frontend/src/App.js"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: true
     status_history:
       - working: false
         agent: "main"
-        comment: "Modified audio recording to send 5-second chunks to speech detection API. Added popup notification when speech detected. Added speech detection status indicator. Added violation logging for detected speech. Needs testing to verify frontend-backend integration."
+        comment: "Modified audio recording to send 5-second chunks to speech detection API. Added popup notification when speech detected. Added speech detection status indicator. Added violation logging for detected speech. Backend now fixed and working with PostgreSQL, ready to test frontend integration."
 
 metadata:
   created_by: "main_agent"
