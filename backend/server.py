@@ -91,6 +91,14 @@ class DeviceCheckResult(BaseModel):
     detected_devices: List[str]
     check_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+class VideoUpload(BaseModel):
+    student_id: str
+    exam_session_id: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    is_final: bool = False
+    file_size: int
+    file_name: str
+
 # Helper functions
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
