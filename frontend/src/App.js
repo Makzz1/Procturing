@@ -337,7 +337,34 @@ const ExamPlatform = () => {
   );
 };
 
-  // Enhanced Exam Interface Component with Monitoring
+  // Auto-dismissing Violation Alert Component
+const ViolationAlert = ({ violation, getViolationColor }) => {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(false);
+    }, 3000); // Disappear after 3 seconds
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!isVisible) return null;
+
+  return (
+    <div className={`violation-item ${getViolationColor(violation.type)} violation-alert`}>
+      <div className="violation-header">
+        <span className="violation-type">{violation.type}</span>
+        <span className="violation-time">{new Date(violation.timestamp).toLocaleTimeString()}</span>
+        <button className="dismiss-violation" onClick={() => setIsVisible(false)}>×</button>
+      </div>
+      <div className="violation-details">{violation.details}</div>
+      <div className="violation-question">Question: {violation.questionNumber}</div>
+    </div>
+  );
+};
+
+// Enhanced Exam Interface Component with Monitoring
 const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers, setAnswers }) => {
   const [violations, setViolations] = useState([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
