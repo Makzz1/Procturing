@@ -100,6 +100,11 @@ class VideoUpload(BaseModel):
     file_size: int
     file_name: str
 
+class SpeechDetectionResult(BaseModel):
+    speech_detected: bool
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    message: str
+
 # Helper functions
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
