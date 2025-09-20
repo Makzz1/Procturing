@@ -2,7 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from supabase import create_client, Client
+from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
@@ -11,23 +11,15 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 import hashlib
-from speech_detection import initialize_speech_detection, detect_speech_from_bytes
 
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# Supabase connection
-supabase_url = os.environ.get('SUPABASE_URL')
-supabase_key = os.environ.get('SUPABASE_ANON_KEY')
-
-if not supabase_url or not supabase_key:
-    # For development, use placeholder values
-    supabase_url = "https://placeholder.supabase.co"
-    supabase_key = "placeholder_key"
-    logging.warning("Supabase credentials not found. Using placeholder values.")
-
-supabase: Client = create_client(supabase_url, supabase_key)
+# MongoDB connection
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -99,30 +91,13 @@ class DeviceCheckResult(BaseModel):
     detected_devices: List[str]
     check_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class AudioUpload(BaseModel):
-    student_id: str
-    exam_session_id: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    file_size: int
-    file_name: str
-
-class FaceCapture(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    student_id: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    file_size: int
-    file_name: str
+class VideoUpload(BaseModel):
     student_id: str
     exam_session_id: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_final: bool = False
     file_size: int
     file_name: str
-
-class SpeechDetectionResult(BaseModel):
-    speech_detected: bool
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    message: str
 
 # Helper functions
 def hash_password(password: str) -> str:
@@ -133,21 +108,14 @@ def verify_password(password: str, hashed: str) -> bool:
 
 # Initialize default admin if not exists
 async def init_default_admin():
-    try:
-        # Check if admin exists
-        result = supabase.table('admins').select('*').eq('username', 'admin').execute()
-        
-        if not result.data:
-            default_admin = {
-                'id': str(uuid.uuid4()),
-                'username': 'admin',
-                'password_hash': hash_password('admin123'),
-                'created_at': datetime.now(timezone.utc).isoformat()
-            }
-            supabase.table('admins').insert(default_admin).execute()
-            logger.info("Default admin created: username=admin, password=admin123")
-    except Exception as e:
-        logger.error(f"Error initializing default admin: {e}")
+    admin_exists = await db.admins.find_one({"username": "admin"})
+    if not admin_exists:
+        default_admin = Admin(
+            username="admin",
+            password_hash=hash_password("admin123")
+        )
+        await db.admins.insert_one(default_admin.dict())
+        logger.info("Default admin created: username=admin, password=admin123")
 
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
@@ -156,308 +124,91 @@ async def root():
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
-    status_obj = StatusCheck(**input.dict())
-    status_data = status_obj.dict()
-    status_data['timestamp'] = status_data['timestamp'].isoformat()
-    
-    try:
-        supabase.table('status_checks').insert(status_data).execute()
-        return status_obj
-    except Exception as e:
-        logger.error(f"Error creating status check: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create status check")
+    status_dict = input.dict()
+    status_obj = StatusCheck(**status_dict)
+    _ = await db.status_checks.insert_one(status_obj.dict())
+    return status_obj
 
 @api_router.get("/status", response_model=List[StatusCheck])
 async def get_status_checks():
-    try:
-        result = supabase.table('status_checks').select('*').execute()
-        status_checks = []
-        for item in result.data:
-            item['timestamp'] = datetime.fromisoformat(item['timestamp'].replace('Z', '+00:00'))
-            status_checks.append(StatusCheck(**item))
-        return status_checks
-    except Exception as e:
-        logger.error(f"Error getting status checks: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get status checks")
+    status_checks = await db.status_checks.find().to_list(1000)
+    return [StatusCheck(**status_check) for status_check in status_checks]
 
 # Admin Authentication Routes
 @api_router.post("/admin/login")
 async def admin_login(credentials: AdminLogin):
-    try:
-        result = supabase.table('admins').select('*').eq('username', credentials.username).execute()
-        
-        if not result.data or not verify_password(credentials.password, result.data[0]['password_hash']):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        
-        admin = result.data[0]
-        
-        # Simple token (in production, use JWT)
-        token = str(uuid.uuid4())
-        session_data = {
-            'token': token,
-            'admin_id': admin['id'],
-            'created_at': datetime.now(timezone.utc).isoformat()
-        }
-        
-        supabase.table('admin_sessions').insert(session_data).execute()
-        
-        return {"token": token, "message": "Login successful"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error during admin login: {e}")
-        raise HTTPException(status_code=500, detail="Login failed")
+    admin = await db.admins.find_one({"username": credentials.username})
+    if not admin or not verify_password(credentials.password, admin["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Simple token (in production, use JWT)
+    token = str(uuid.uuid4())
+    await db.admin_sessions.insert_one({
+        "token": token,
+        "admin_id": admin["id"],
+        "created_at": datetime.now(timezone.utc)
+    })
+    
+    return {"token": token, "message": "Login successful"}
 
 # Question Management Routes
 @api_router.post("/admin/questions", response_model=Question)
 async def create_question(question: QuestionCreate):
-    try:
-        question_obj = Question(**question.dict())
-        question_data = question_obj.dict()
-        question_data['created_at'] = question_data['created_at'].isoformat()
-        
-        supabase.table('questions').insert(question_data).execute()
-        return question_obj
-    except Exception as e:
-        logger.error(f"Error creating question: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create question")
+    question_obj = Question(**question.dict())
+    await db.questions.insert_one(question_obj.dict())
+    return question_obj
 
 @api_router.get("/admin/questions", response_model=List[Question])
 async def get_all_questions():
-    try:
-        result = supabase.table('questions').select('*').execute()
-        questions = []
-        for item in result.data:
-            item['created_at'] = datetime.fromisoformat(item['created_at'].replace('Z', '+00:00'))
-            questions.append(Question(**item))
-        return questions
-    except Exception as e:
-        logger.error(f"Error getting questions: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get questions")
+    questions = await db.questions.find().to_list(1000)
+    return [Question(**question) for question in questions]
 
 @api_router.get("/questions")
 async def get_exam_questions():
-    try:
-        # Get random questions for exam (Supabase doesn't have $sample, so we'll get all and sample in Python)
-        result = supabase.table('questions').select('*').execute()
-        questions = result.data
-        
-        # Randomly sample 50 questions (or all if less than 50)
-        import random
-        sampled_questions = random.sample(questions, min(50, len(questions)))
-        
-        # Don't return correct answers to students
-        for q in sampled_questions:
-            q.pop('correct_answer', None)
-        
-        return sampled_questions
-    except Exception as e:
-        logger.error(f"Error getting exam questions: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get exam questions")
+    # Get 50 random questions for exam
+    pipeline = [{"$sample": {"size": 50}}]
+    questions = await db.questions.aggregate(pipeline).to_list(50)
+    # Don't return correct answers to students
+    for q in questions:
+        q.pop('correct_answer', None)
+        q.pop('_id', None)  # Remove MongoDB _id field
+    return questions
 
 @api_router.delete("/admin/questions/{question_id}")
 async def delete_question(question_id: str):
-    try:
-        result = supabase.table('questions').delete().eq('id', question_id).execute()
-        
-        if not result.data:
-            raise HTTPException(status_code=404, detail="Question not found")
-        
-        return {"message": "Question deleted successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting question: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete question")
+    result = await db.questions.delete_one({"id": question_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Question not found")
+    return {"message": "Question deleted successfully"}
 
 # Exam Logging Routes
 @api_router.post("/exam/logs", response_model=ExamLog)
 async def create_exam_log(log: ExamLogCreate):
-    try:
-        log_obj = ExamLog(**log.dict())
-        log_data = log_obj.dict()
-        log_data['timestamp'] = log_data['timestamp'].isoformat()
-        
-        supabase.table('exam_logs').insert(log_data).execute()
-        return log_obj
-    except Exception as e:
-        logger.error(f"Error creating exam log: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create exam log")
+    log_obj = ExamLog(**log.dict())
+    await db.exam_logs.insert_one(log_obj.dict())
+    return log_obj
 
 @api_router.get("/admin/logs", response_model=List[ExamLog])
 async def get_exam_logs():
-    try:
-        result = supabase.table('exam_logs').select('*').order('timestamp', desc=True).execute()
-        logs = []
-        for item in result.data:
-            item['timestamp'] = datetime.fromisoformat(item['timestamp'].replace('Z', '+00:00'))
-            logs.append(ExamLog(**item))
-        return logs
-    except Exception as e:
-        logger.error(f"Error getting exam logs: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get exam logs")
+    logs = await db.exam_logs.find().sort("timestamp", -1).to_list(1000)
+    return [ExamLog(**log) for log in logs]
 
 # Device Check Routes
 @api_router.post("/device/check", response_model=DeviceCheckResult)
 async def device_check(check_data: DeviceCheckResult):
-    try:
-        check_dict = check_data.dict()
-        check_dict['check_timestamp'] = check_dict['check_timestamp'].isoformat()
-        
-        supabase.table('device_checks').insert(check_dict).execute()
-        return check_data
-    except Exception as e:
-        logger.error(f"Error storing device check: {e}")
-        raise HTTPException(status_code=500, detail="Failed to store device check")
+    # Store device check result
+    await db.device_checks.insert_one(check_data.dict())
+    return check_data
 
 @api_router.get("/admin/device-checks")
 async def get_device_checks():
-    try:
-        result = supabase.table('device_checks').select('*').order('check_timestamp', desc=True).limit(100).execute()
-        
-        # Convert timestamp strings back to datetime objects for consistency
-        for check in result.data:
-            check['check_timestamp'] = datetime.fromisoformat(check['check_timestamp'].replace('Z', '+00:00'))
-        
-        return result.data
-    except Exception as e:
-        logger.error(f"Error getting device checks: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get device checks")
+    checks = await db.device_checks.find().sort("check_timestamp", -1).to_list(100)
+    # Remove MongoDB _id field to avoid serialization issues
+    for check in checks:
+        check.pop('_id', None)
+    return checks
 
-# Speech Detection Route
-@api_router.post("/exam/detect-speech", response_model=SpeechDetectionResult)
-async def detect_speech_in_audio(
-    audio: UploadFile = File(...),
-    student_id: str = Form(...),
-    exam_session_id: str = Form(...),
-    timestamp: str = Form(...)
-):
-    try:
-        # Read audio data
-        audio_bytes = await audio.read()
-        logger.info(f"Received audio chunk: {len(audio_bytes)} bytes from student {student_id}")
-        
-        # Detect speech in the audio chunk
-        speech_detected = detect_speech_from_bytes(audio_bytes, audio.content_type or "audio/webm")
-        
-        result = SpeechDetectionResult(
-            speech_detected=speech_detected,
-            message="Human speech detected" if speech_detected else "No human speech detected"
-        )
-        
-        if speech_detected:
-            # Log the speech detection as a violation
-            violation_log = ExamLogCreate(
-                log_id=f"speech_detected_{int(datetime.now().timestamp())}",
-                reason="SPEECH_DETECTED: Human speech detected during exam",
-                student_id=student_id,
-                exam_session_id=exam_session_id
-            )
-            
-            # Save violation to database
-            try:
-                log_obj = ExamLog(**violation_log.dict())
-                log_data = log_obj.dict()
-                log_data['timestamp'] = log_data['timestamp'].isoformat()
-                supabase.table('exam_logs').insert(log_data).execute()
-                logger.info(f"Speech violation logged for student {student_id}")
-            except Exception as log_error:
-                logger.error(f"Failed to log speech violation: {log_error}")
-        
-        return result
-        
-    except Exception as e:
-        logger.error(f"Error in speech detection endpoint: {e}")
-        raise HTTPException(status_code=500, detail=f"Speech detection failed: {str(e)}")
-
-# Face capture endpoint (commented out - ready for implementation)
-"""
-@api_router.post("/exam/upload-face")
-async def upload_face_image(
-    face_image: UploadFile = File(...),
-    student_id: str = Form(...),
-    timestamp: str = Form(...)
-):
-    try:
-        # Create uploads directory if it doesn't exist
-        upload_dir = Path("uploads/faces")
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Generate unique filename
-        file_name = f"face_{student_id}_{int(datetime.now().timestamp())}.jpg"
-        file_path = upload_dir / file_name
-        
-        # Save face image
-        with open(file_path, "wb") as buffer:
-            content = await face_image.read()
-            buffer.write(content)
-        
-        # Log face capture
-        face_log = {
-            'id': str(uuid.uuid4()),
-            'student_id': student_id,
-            'timestamp': datetime.fromisoformat(timestamp.replace('Z', '+00:00')).isoformat(),
-            'file_size': len(content),
-            'file_name': file_name
-        }
-        
-        supabase.table('face_captures').insert(face_log).execute()
-        
-        return {
-            "message": "Face image uploaded successfully",
-            "file_name": file_name,
-            "file_size": len(content)
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to upload face image: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to upload face image")
-"""
-
-# Audio upload endpoint (commented out - ready for implementation)
-"""
-@api_router.post("/exam/upload-audio")
-async def upload_audio_chunk(
-    audio: UploadFile = File(...),
-    student_id: str = Form(...),
-    exam_session_id: str = Form(...),
-    timestamp: str = Form(...)
-):
-    try:
-        # Create uploads directory if it doesn't exist
-        upload_dir = Path("uploads/audio")
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Generate unique filename
-        file_name = f"{student_id}_{exam_session_id}_{int(datetime.now().timestamp())}.webm"
-        file_path = upload_dir / file_name
-        
-        # Save audio file
-        with open(file_path, "wb") as buffer:
-            content = await audio.read()
-            buffer.write(content)
-        
-        # Log audio upload
-        audio_log = {
-            'student_id': student_id,
-            'exam_session_id': exam_session_id,
-            'timestamp': datetime.fromisoformat(timestamp.replace('Z', '+00:00')).isoformat(),
-            'file_size': len(content),
-            'file_name': file_name
-        }
-        
-        supabase.table('audio_uploads').insert(audio_log).execute()
-        
-        return {
-            "message": "Audio chunk uploaded successfully",
-            "file_name": file_name,
-            "file_size": len(content)
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to upload audio: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to upload audio")
-"""
+# Video upload endpoint (commented out - ready for implementation)
 """
 @api_router.post("/exam/upload-video")
 async def upload_video_chunk(
@@ -491,9 +242,7 @@ async def upload_video_chunk(
             file_name=file_name
         )
         
-        video_data = video_log.dict()
-        video_data['timestamp'] = video_data['timestamp'].isoformat()
-        supabase.table('video_uploads').insert(video_data).execute()
+        await db.video_uploads.insert_one(video_log.dict())
         
         return {
             "message": "Video chunk uploaded successfully",
@@ -527,12 +276,7 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_event():
     await init_default_admin()
-    # Initialize speech detection model
-    logger.info("Initializing speech detection model...")
-    success = initialize_speech_detection()
-    if success:
-        logger.info("✅ Speech detection model initialized successfully")
-    else:
-        logger.warning("⚠️ Speech detection model failed to initialize - feature will be disabled")
 
-# Note: No shutdown event needed for Supabase as it handles connections automatically
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
