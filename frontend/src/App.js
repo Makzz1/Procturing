@@ -589,6 +589,7 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       // 2. Start video/audio capture (but don't fail if denied)
       try {
         await startMediaCapture();
+        await startAudioRecording(); // Start separate audio recording
       } catch (e) {
         console.log("Media access denied, continuing...");
       }
