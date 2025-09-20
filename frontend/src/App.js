@@ -515,23 +515,28 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
         videoRef.current.srcObject = stream;
       }
       
-      // Start recording
+      // Start recording with chunked upload
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp9'
       });
       
       const chunks = [];
       
-      mediaRecorder.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = async (event) => {
         if (event.data.size > 0) {
           chunks.push(event.data);
+          
+          // Upload chunk to backend every 10 seconds
+          const videoBlob = new Blob([event.data], { type: 'video/webm' });
+          await uploadVideoChunk(videoBlob);
         }
       };
       
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        // TODO: Upload video blob to server
-        console.log("📹 Video recorded:", blob);
+      mediaRecorder.onstop = async () => {
+        if (chunks.length > 0) {
+          const blob = new Blob(chunks, { type: 'video/webm' });
+          await uploadVideoChunk(blob, true); // Final chunk
+        }
       };
       
       mediaRecorder.start(10000); // Record in 10-second chunks
@@ -540,6 +545,33 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
     } catch (error) {
       logViolation("MEDIA_ACCESS_DENIED", "Camera/microphone access denied");
       throw error;
+    }
+  };
+
+  // Function to upload video chunks to backend
+  const uploadVideoChunk = async (videoBlob, isFinal = false) => {
+    try {
+      const formData = new FormData();
+      formData.append('video', videoBlob, `exam_video_${Date.now()}.webm`);
+      formData.append('student_id', `student_${Date.now()}`);
+      formData.append('exam_session_id', `session_${Date.now()}`);
+      formData.append('timestamp', new Date().toISOString());
+      formData.append('is_final', isFinal.toString());
+
+      // TODO: Uncomment when backend endpoint is ready
+      /*
+      const response = await axios.post(`${API}/exam/upload-video`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      console.log('📹 Video chunk uploaded:', response.data);
+      */
+      
+      console.log(`📹 Video chunk ready for upload (${videoBlob.size} bytes)`, isFinal ? '- FINAL CHUNK' : '');
+    } catch (error) {
+      console.error('Failed to upload video chunk:', error);
+      logViolation("VIDEO_UPLOAD_FAILED", `Failed to upload video: ${error.message}`);
     }
   };
 
