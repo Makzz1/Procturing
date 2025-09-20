@@ -236,8 +236,14 @@ const DeviceCheck = ({ onCheckComplete }) => {
 
       setCheckResult(result);
       
-      // Send to backend
-      await axios.post(`${API}/device/check`, result);
+      // Send to backend (with error handling)
+      try {
+        await axios.post(`${API}/device/check`, result);
+        console.log("✅ Device check data sent to backend");
+      } catch (error) {
+        console.log("⚠️ Backend unavailable, continuing without logging device check:", error.message);
+        // Continue anyway - don't block the exam flow due to backend issues
+      }
       
       onCheckComplete(result);
     } catch (error) {
