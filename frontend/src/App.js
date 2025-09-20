@@ -822,7 +822,9 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       };
       
       audioRecorder.start(5000); // Record audio in 5-second chunks
-      console.log('🎤 Audio recording started');
+      audioRecorderRef.current = audioRecorder;
+      setSpeechDetectionActive(true);
+      console.log('🎤 Audio recording started for speech detection');
       
     } catch (error) {
       console.error('Failed to start audio recording:', error);
