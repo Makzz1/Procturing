@@ -326,6 +326,13 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_event():
     await init_default_admin()
+    # Initialize speech detection model
+    logger.info("Initializing speech detection model...")
+    success = initialize_speech_detection()
+    if success:
+        logger.info("✅ Speech detection model initialized successfully")
+    else:
+        logger.warning("⚠️ Speech detection model failed to initialize - feature will be disabled")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
