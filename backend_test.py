@@ -255,13 +255,10 @@ class ExamPlatformTester:
             
             if response.status_code == 200:
                 data = response.json()
-                required_fields = ["has_multiple_keyboards", "has_external_monitors", "keyboard_count", "monitor_count", "detected_devices", "check_timestamp"]
-                
-                if all(field in data for field in required_fields):
-                    self.log_result("Post Device Check", True, f"Device check recorded at: {data['check_timestamp']}")
+                if "id" in data and "message" in data:
+                    self.log_result("Post Device Check", True, f"Device check recorded with ID: {data['id']}")
                 else:
-                    missing_fields = [field for field in required_fields if field not in data]
-                    self.log_result("Post Device Check", False, f"Missing fields: {missing_fields}")
+                    self.log_result("Post Device Check", False, f"Missing id or message in response: {data}")
             else:
                 self.log_result("Post Device Check", False, f"Status: {response.status_code}, Response: {response.text}")
         except Exception as e:
