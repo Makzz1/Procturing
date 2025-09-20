@@ -742,24 +742,22 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
         </div>
       </div>
 
-      {/* Violations Log (for testing - remove in production) */}
+      {/* Auto-dismissing Violations Log */}
       {violations.length > 0 && (
         <div className="violations-log">
           <h4>Security Violations Detected:</h4>
           <div className="violations-list">
-            {violations.slice(-5).map((violation, index) => (
-              <div key={index} className={`violation-item ${getViolationColor(violation.type)}`}>
-                <div className="violation-header">
-                  <span className="violation-type">{violation.type}</span>
-                  <span className="violation-time">{new Date(violation.timestamp).toLocaleTimeString()}</span>
-                </div>
-                <div className="violation-details">{violation.details}</div>
-                <div className="violation-question">Question: {violation.questionNumber}</div>
-              </div>
+            {violations.slice(-3).map((violation, index) => (
+              <ViolationAlert key={`${violation.timestamp}-${index}`} violation={violation} getViolationColor={getViolationColor} />
             ))}
           </div>
         </div>
       )}
+
+      {/* No Talking Warning */}
+      <div className="no-talking-warning">
+        🔇 REMINDER: No talking allowed during the exam. All audio is being recorded.
+      </div>
 
       {/* Warning Messages */}
       {!isFullscreen && isMonitoring && (
