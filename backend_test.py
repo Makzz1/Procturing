@@ -10,6 +10,8 @@ import uuid
 from datetime import datetime, timezone
 import sys
 import os
+import io
+import subprocess
 
 # Get backend URL from frontend .env file
 def get_backend_url():
