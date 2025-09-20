@@ -313,6 +313,7 @@ const ExamPlatform = () => {
                 <li>• Do not switch windows or tabs</li>
                 <li>• Keep your face visible to camera</li>
                 <li>• No external materials allowed</li>
+                <li>• <strong>No talking or making noise - Audio is recorded</strong></li>
               </ul>
             </div>
           </div>
