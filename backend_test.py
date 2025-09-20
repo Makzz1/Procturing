@@ -307,6 +307,14 @@ class ExamPlatformTester:
         self.test_device_check_post()
         self.test_fetch_device_checks()
         
+        # Test 6: Speech Detection API
+        self.test_speech_detection_with_speech()
+        self.test_speech_detection_with_silence()
+        self.test_speech_detection_with_non_speech_sound()
+        self.test_speech_detection_violation_logging()
+        self.test_speech_detection_error_handling()
+        self.test_speech_detection_different_formats()
+        
         # Print summary
         print("\n" + "=" * 80)
         print("TEST SUMMARY")
