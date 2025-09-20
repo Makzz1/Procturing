@@ -318,7 +318,94 @@ async def get_device_checks():
         logger.error(f"Error getting device checks: {e}")
         raise HTTPException(status_code=500, detail="Failed to get device checks")
 
-# Video upload endpoint (commented out - ready for implementation)
+# Face capture endpoint (commented out - ready for implementation)
+"""
+@api_router.post("/exam/upload-face")
+async def upload_face_image(
+    face_image: UploadFile = File(...),
+    student_id: str = Form(...),
+    timestamp: str = Form(...)
+):
+    try:
+        # Create uploads directory if it doesn't exist
+        upload_dir = Path("uploads/faces")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        file_name = f"face_{student_id}_{int(datetime.now().timestamp())}.jpg"
+        file_path = upload_dir / file_name
+        
+        # Save face image
+        with open(file_path, "wb") as buffer:
+            content = await face_image.read()
+            buffer.write(content)
+        
+        # Log face capture
+        face_log = {
+            'id': str(uuid.uuid4()),
+            'student_id': student_id,
+            'timestamp': datetime.fromisoformat(timestamp.replace('Z', '+00:00')).isoformat(),
+            'file_size': len(content),
+            'file_name': file_name
+        }
+        
+        supabase.table('face_captures').insert(face_log).execute()
+        
+        return {
+            "message": "Face image uploaded successfully",
+            "file_name": file_name,
+            "file_size": len(content)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to upload face image: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to upload face image")
+"""
+
+# Audio upload endpoint (commented out - ready for implementation)
+"""
+@api_router.post("/exam/upload-audio")
+async def upload_audio_chunk(
+    audio: UploadFile = File(...),
+    student_id: str = Form(...),
+    exam_session_id: str = Form(...),
+    timestamp: str = Form(...)
+):
+    try:
+        # Create uploads directory if it doesn't exist
+        upload_dir = Path("uploads/audio")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        file_name = f"{student_id}_{exam_session_id}_{int(datetime.now().timestamp())}.webm"
+        file_path = upload_dir / file_name
+        
+        # Save audio file
+        with open(file_path, "wb") as buffer:
+            content = await audio.read()
+            buffer.write(content)
+        
+        # Log audio upload
+        audio_log = {
+            'student_id': student_id,
+            'exam_session_id': exam_session_id,
+            'timestamp': datetime.fromisoformat(timestamp.replace('Z', '+00:00')).isoformat(),
+            'file_size': len(content),
+            'file_name': file_name
+        }
+        
+        supabase.table('audio_uploads').insert(audio_log).execute()
+        
+        return {
+            "message": "Audio chunk uploaded successfully",
+            "file_name": file_name,
+            "file_size": len(content)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to upload audio: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to upload audio")
+"""
 """
 @api_router.post("/exam/upload-video")
 async def upload_video_chunk(
