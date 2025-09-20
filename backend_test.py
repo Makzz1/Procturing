@@ -309,7 +309,7 @@ class ExamPlatformTester:
                         if result["speech_detected"] == True:
                             self.log_result("Speech Detection (With Speech)", True, f"Correctly detected speech: {result['message']}")
                         else:
-                            self.log_result("Speech Detection (With Speech)", False, f"Failed to detect speech in synthetic audio: {result['message']}")
+                            self.log_result("Speech Detection (With Speech)", False, f"Failed to detect speech in human audio: {result['message']}")
                     else:
                         missing_fields = [field for field in required_fields if field not in result]
                         self.log_result("Speech Detection (With Speech)", False, f"Missing fields in response: {missing_fields}")
