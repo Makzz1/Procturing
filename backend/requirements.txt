@@ -79,3 +79,8 @@ urllib3==2.5.0
 uvicorn==0.25.0
 watchfiles==1.1.0
 websockets==15.0.1
+torch==2.0.0
+librosa==0.10.1
+noisereduce==3.0.0
+pydub==0.25.1
+numpy==2.3.3
