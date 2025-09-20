@@ -102,7 +102,51 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test the exam platform backend thoroughly: Basic API Health Check, Admin Authentication, Question Management (CRUD operations), Exam Logging, and Device Check API. Verify data models work correctly with MongoDB and check for validation errors, authentication issues, or database connection problems."
+user_problem_statement: "Add live audio recording with speech detection to exam platform. Frontend should send 5-second audio chunks to backend for human speech detection. When speech is detected, show popup warning and log as violation."
+
+backend:
+  - task: "Speech Detection API Endpoint"
+    implemented: true
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "Created /api/exam/detect-speech endpoint with Silero VAD model integration. Added speech_detection.py module with required dependencies (torch, librosa, noisereduce, pydub). Model initialization on startup. Needs testing to verify speech detection accuracy."
+
+frontend:
+  - task: "Live Audio Recording with Speech Detection"
+    implemented: true
+    working: false
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "Modified audio recording to send 5-second chunks to speech detection API. Added popup notification when speech detected. Added speech detection status indicator. Added violation logging for detected speech. Needs testing to verify frontend-backend integration."
+
+metadata:
+  created_by: "main_agent"
+  version: "2.0"
+  test_sequence: 0
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Speech Detection API Endpoint"
+    - "Live Audio Recording with Speech Detection"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Implemented live audio speech detection system. Backend has new /api/exam/detect-speech endpoint using Silero VAD model. Frontend continuously records 5-second audio chunks and sends to backend. When speech detected, shows popup and logs violation. Ready for comprehensive testing of speech detection accuracy and frontend-backend integration."
 
 backend:
   - task: "Basic API Health Check"
