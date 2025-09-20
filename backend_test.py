@@ -13,21 +13,27 @@ import os
 import io
 import subprocess
 
-# Get backend URL from frontend .env file
+# Get backend URL - try environment variable first, then default to localhost
 def get_backend_url():
+    # Try environment variable first
+    backend_url = os.environ.get('REACT_APP_BACKEND_URL')
+    if backend_url:
+        return backend_url
+    
+    # Try reading from frontend .env file
     try:
         with open('/app/frontend/.env', 'r') as f:
             for line in f:
                 if line.startswith('REACT_APP_BACKEND_URL='):
                     return line.split('=', 1)[1].strip()
     except Exception as e:
-        print(f"Error reading frontend .env: {e}")
-        return None
+        print(f"Warning: Could not read frontend .env: {e}")
+    
+    # Default to localhost for testing
+    return "http://localhost:8001"
 
 BASE_URL = get_backend_url()
-if not BASE_URL:
-    print("ERROR: Could not get REACT_APP_BACKEND_URL from frontend/.env")
-    sys.exit(1)
+print(f"Using backend URL: {BASE_URL}")
 
 API_URL = f"{BASE_URL}/api"
 print(f"Testing backend API at: {API_URL}")
