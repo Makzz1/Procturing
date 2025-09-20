@@ -315,9 +315,14 @@ const DeviceCheck = ({ onCheckComplete }) => {
               <div className="warning-section">
                 <h4 className="text-red-600 font-semibold">⚠️ Warning:</h4>
                 <p>External devices detected. Please disconnect them before proceeding.</p>
-                <button onClick={checkDevices} className="recheck-button">
-                  Re-check Devices
-                </button>
+                <div className="warning-buttons">
+                  <button onClick={checkDevices} className="recheck-button">
+                    Re-check Devices
+                  </button>
+                  <button onClick={() => onCheckComplete(checkResult)} className="continue-anyway-button">
+                    Continue Anyway
+                  </button>
+                </div>
               </div>
             )}
 
@@ -325,6 +330,9 @@ const DeviceCheck = ({ onCheckComplete }) => {
               <div className="success-section">
                 <h4 className="text-green-600 font-semibold">✅ All Clear!</h4>
                 <p>No external devices detected. You may proceed with the exam.</p>
+                <button onClick={() => onCheckComplete(checkResult)} className="proceed-button">
+                  Proceed to Face Verification
+                </button>
               </div>
             )}
           </div>
