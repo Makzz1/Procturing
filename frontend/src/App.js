@@ -771,6 +771,12 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
   // Function to upload audio chunks to backend and check for speech
   const uploadAudioChunk = async (audioBlob) => {
     try {
+      // Check if we have valid audio data
+      if (!audioBlob || audioBlob.size === 0) {
+        console.log('⚠️ No audio data to upload, skipping speech detection');
+        return;
+      }
+
       const formData = new FormData();
       formData.append('audio', audioBlob, `exam_audio_${Date.now()}.webm`);
       formData.append('student_id', `student_${Date.now()}`);
@@ -783,6 +789,7 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 10000, // 10 second timeout
       });
       
       console.log('🎤 Speech detection response:', response.data);
@@ -805,10 +812,16 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
         status: error.response?.status,
         url: `${API}/exam/detect-speech`
       });
-      logViolation("AUDIO_UPLOAD_FAILED", `Failed to upload audio: ${error.message}`);
       
-      // Show user-friendly error message
-      alert(`Audio upload failed: ${error.message}. Please check your network connection.`);
+      // Only log as violation if it's an actual network/server error
+      // Don't spam violations for audio access issues
+      if (error.response?.status >= 500 || error.code === 'NETWORK_ERROR') {
+        logViolation("AUDIO_UPLOAD_FAILED", `Network error uploading audio: ${error.message}`);
+      } else if (error.response?.status >= 400) {
+        console.log('⚠️ Audio upload failed due to client error, continuing without speech detection');
+      } else {
+        console.log('⚠️ Audio upload failed, continuing exam without speech detection');
+      }
     }
   };
 
