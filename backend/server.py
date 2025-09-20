@@ -98,7 +98,19 @@ class DeviceCheckResult(BaseModel):
     detected_devices: List[str]
     check_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class VideoUpload(BaseModel):
+class AudioUpload(BaseModel):
+    student_id: str
+    exam_session_id: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    file_size: int
+    file_name: str
+
+class FaceCapture(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    file_size: int
+    file_name: str
     student_id: str
     exam_session_id: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
