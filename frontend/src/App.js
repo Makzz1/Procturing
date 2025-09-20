@@ -836,8 +836,16 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       console.log('🎤 Audio recording started for speech detection');
       
     } catch (error) {
-      console.error('Failed to start audio recording:', error);
-      logViolation("AUDIO_ACCESS_DENIED", "Audio access denied for separate recording");
+      console.error('❌ Failed to start audio recording:', error);
+      console.error('❌ Audio recording error details:', {
+        name: error.name,
+        message: error.message,
+        constraint: error.constraint
+      });
+      logViolation("AUDIO_ACCESS_DENIED", `Audio access denied: ${error.message}`);
+      
+      // Show user-friendly message
+      console.log('⚠️ Audio recording disabled due to browser security. Speech detection will not work.');
     }
   };
   const uploadVideoChunk = async (videoBlob, isFinal = false) => {
