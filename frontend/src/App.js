@@ -693,7 +693,58 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
     }
   };
 
-  // Function to upload video chunks to backend
+  // Function to upload audio chunks to backend
+  const uploadAudioChunk = async (audioBlob) => {
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, `exam_audio_${Date.now()}.webm`);
+      formData.append('student_id', `student_${Date.now()}`);
+      formData.append('exam_session_id', `session_${Date.now()}`);
+      formData.append('timestamp', new Date().toISOString());
+
+      // TODO: Uncomment when backend endpoint is ready
+      /*
+      const response = await axios.post(`${API}/exam/upload-audio`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      console.log('🎤 Audio chunk uploaded:', response.data);
+      */
+      
+      console.log(`🎤 Audio chunk ready for upload (${audioBlob.size} bytes)`);
+    } catch (error) {
+      console.error('Failed to upload audio chunk:', error);
+      logViolation("AUDIO_UPLOAD_FAILED", `Failed to upload audio: ${error.message}`);
+    }
+  };
+
+  // Start separate audio recording
+  const startAudioRecording = async () => {
+    try {
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false
+      });
+      
+      const audioRecorder = new MediaRecorder(audioStream, {
+        mimeType: 'audio/webm'
+      });
+      
+      audioRecorder.ondataavailable = async (event) => {
+        if (event.data.size > 0) {
+          await uploadAudioChunk(event.data);
+        }
+      };
+      
+      audioRecorder.start(5000); // Record audio in 5-second chunks
+      console.log('🎤 Audio recording started');
+      
+    } catch (error) {
+      console.error('Failed to start audio recording:', error);
+      logViolation("AUDIO_ACCESS_DENIED", "Audio access denied for separate recording");
+    }
+  };
   const uploadVideoChunk = async (videoBlob, isFinal = false) => {
     try {
       const formData = new FormData();
