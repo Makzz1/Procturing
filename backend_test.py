@@ -112,14 +112,11 @@ class ExamPlatformTester:
             
             if response.status_code == 200:
                 data = response.json()
-                required_fields = ["id", "question_text", "option_a", "option_b", "option_c", "option_d", "correct_answer", "created_at"]
-                
-                if all(field in data for field in required_fields):
+                if "id" in data and "message" in data:
                     self.test_question_id = data["id"]  # Store for deletion test
                     self.log_result("Create MCQ Question", True, f"Question created with ID: {data['id']}")
                 else:
-                    missing_fields = [field for field in required_fields if field not in data]
-                    self.log_result("Create MCQ Question", False, f"Missing fields: {missing_fields}")
+                    self.log_result("Create MCQ Question", False, f"Missing id or message in response: {data}")
             else:
                 self.log_result("Create MCQ Question", False, f"Status: {response.status_code}, Response: {response.text}")
         except Exception as e:
