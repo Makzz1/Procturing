@@ -88,3 +88,4 @@ setuptools
 torchaudio
 lazy_loader
 psycopg2-binary
+asyncpg
