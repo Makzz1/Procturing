@@ -208,6 +208,53 @@ async def get_device_checks():
         check.pop('_id', None)
     return checks
 
+# Video upload endpoint (commented out - ready for implementation)
+"""
+@api_router.post("/exam/upload-video")
+async def upload_video_chunk(
+    video: UploadFile = File(...),
+    student_id: str = Form(...),
+    exam_session_id: str = Form(...),
+    timestamp: str = Form(...),
+    is_final: str = Form(...)
+):
+    try:
+        # Create uploads directory if it doesn't exist
+        upload_dir = Path("uploads/videos")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        file_name = f"{student_id}_{exam_session_id}_{int(datetime.now().timestamp())}.webm"
+        file_path = upload_dir / file_name
+        
+        # Save video file
+        with open(file_path, "wb") as buffer:
+            content = await video.read()
+            buffer.write(content)
+        
+        # Log video upload
+        video_log = VideoUpload(
+            student_id=student_id,
+            exam_session_id=exam_session_id,
+            timestamp=datetime.fromisoformat(timestamp.replace('Z', '+00:00')),
+            is_final=is_final.lower() == 'true',
+            file_size=len(content),
+            file_name=file_name
+        )
+        
+        await db.video_uploads.insert_one(video_log.dict())
+        
+        return {
+            "message": "Video chunk uploaded successfully",
+            "file_name": file_name,
+            "file_size": len(content)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to upload video: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to upload video")
+"""
+
 # Include the router in the main app
 app.include_router(api_router)
 
