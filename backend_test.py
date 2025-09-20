@@ -485,7 +485,7 @@ class ExamPlatformTester:
             
             # Convert wav to webm using ffmpeg
             result = subprocess.run([
-                'ffmpeg', '-i', '/app/test_audio/synthetic_speech.wav', 
+                'ffmpeg', '-i', '/app/test_audio/human_speech.wav', 
                 '-c:a', 'libopus', '-y', webm_file_path
             ], capture_output=True, text=True)
             
