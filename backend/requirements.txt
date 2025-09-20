@@ -86,3 +86,5 @@ pydub==0.25.1
 numpy==2.3.3
 setuptools
 torchaudio
+lazy_loader
+psycopg2-binary
