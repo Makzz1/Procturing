@@ -2,7 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from supabase import create_client, Client
 import os
 import logging
 from pathlib import Path
@@ -16,10 +16,17 @@ import hashlib
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Supabase connection
+supabase_url = os.environ.get('SUPABASE_URL')
+supabase_key = os.environ.get('SUPABASE_ANON_KEY')
+
+if not supabase_url or not supabase_key:
+    # For development, use placeholder values
+    supabase_url = "https://placeholder.supabase.co"
+    supabase_key = "placeholder_key"
+    logging.warning("Supabase credentials not found. Using placeholder values.")
+
+supabase: Client = create_client(supabase_url, supabase_key)
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -108,14 +115,21 @@ def verify_password(password: str, hashed: str) -> bool:
 
 # Initialize default admin if not exists
 async def init_default_admin():
-    admin_exists = await db.admins.find_one({"username": "admin"})
-    if not admin_exists:
-        default_admin = Admin(
-            username="admin",
-            password_hash=hash_password("admin123")
-        )
-        await db.admins.insert_one(default_admin.dict())
-        logger.info("Default admin created: username=admin, password=admin123")
+    try:
+        # Check if admin exists
+        result = supabase.table('admins').select('*').eq('username', 'admin').execute()
+        
+        if not result.data:
+            default_admin = {
+                'id': str(uuid.uuid4()),
+                'username': 'admin',
+                'password_hash': hash_password('admin123'),
+                'created_at': datetime.now(timezone.utc).isoformat()
+            }
+            supabase.table('admins').insert(default_admin).execute()
+            logger.info("Default admin created: username=admin, password=admin123")
+    except Exception as e:
+        logger.error(f"Error initializing default admin: {e}")
 
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
@@ -124,89 +138,173 @@ async def root():
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
+    status_obj = StatusCheck(**input.dict())
+    status_data = status_obj.dict()
+    status_data['timestamp'] = status_data['timestamp'].isoformat()
+    
+    try:
+        supabase.table('status_checks').insert(status_data).execute()
+        return status_obj
+    except Exception as e:
+        logger.error(f"Error creating status check: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create status check")
 
 @api_router.get("/status", response_model=List[StatusCheck])
 async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
+    try:
+        result = supabase.table('status_checks').select('*').execute()
+        status_checks = []
+        for item in result.data:
+            item['timestamp'] = datetime.fromisoformat(item['timestamp'].replace('Z', '+00:00'))
+            status_checks.append(StatusCheck(**item))
+        return status_checks
+    except Exception as e:
+        logger.error(f"Error getting status checks: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get status checks")
 
 # Admin Authentication Routes
 @api_router.post("/admin/login")
 async def admin_login(credentials: AdminLogin):
-    admin = await db.admins.find_one({"username": credentials.username})
-    if not admin or not verify_password(credentials.password, admin["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    # Simple token (in production, use JWT)
-    token = str(uuid.uuid4())
-    await db.admin_sessions.insert_one({
-        "token": token,
-        "admin_id": admin["id"],
-        "created_at": datetime.now(timezone.utc)
-    })
-    
-    return {"token": token, "message": "Login successful"}
+    try:
+        result = supabase.table('admins').select('*').eq('username', credentials.username).execute()
+        
+        if not result.data or not verify_password(credentials.password, result.data[0]['password_hash']):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        admin = result.data[0]
+        
+        # Simple token (in production, use JWT)
+        token = str(uuid.uuid4())
+        session_data = {
+            'token': token,
+            'admin_id': admin['id'],
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }
+        
+        supabase.table('admin_sessions').insert(session_data).execute()
+        
+        return {"token": token, "message": "Login successful"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error during admin login: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")
 
 # Question Management Routes
 @api_router.post("/admin/questions", response_model=Question)
 async def create_question(question: QuestionCreate):
-    question_obj = Question(**question.dict())
-    await db.questions.insert_one(question_obj.dict())
-    return question_obj
+    try:
+        question_obj = Question(**question.dict())
+        question_data = question_obj.dict()
+        question_data['created_at'] = question_data['created_at'].isoformat()
+        
+        supabase.table('questions').insert(question_data).execute()
+        return question_obj
+    except Exception as e:
+        logger.error(f"Error creating question: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create question")
 
 @api_router.get("/admin/questions", response_model=List[Question])
 async def get_all_questions():
-    questions = await db.questions.find().to_list(1000)
-    return [Question(**question) for question in questions]
+    try:
+        result = supabase.table('questions').select('*').execute()
+        questions = []
+        for item in result.data:
+            item['created_at'] = datetime.fromisoformat(item['created_at'].replace('Z', '+00:00'))
+            questions.append(Question(**item))
+        return questions
+    except Exception as e:
+        logger.error(f"Error getting questions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get questions")
 
 @api_router.get("/questions")
 async def get_exam_questions():
-    # Get 50 random questions for exam
-    pipeline = [{"$sample": {"size": 50}}]
-    questions = await db.questions.aggregate(pipeline).to_list(50)
-    # Don't return correct answers to students
-    for q in questions:
-        q.pop('correct_answer', None)
-        q.pop('_id', None)  # Remove MongoDB _id field
-    return questions
+    try:
+        # Get random questions for exam (Supabase doesn't have $sample, so we'll get all and sample in Python)
+        result = supabase.table('questions').select('*').execute()
+        questions = result.data
+        
+        # Randomly sample 50 questions (or all if less than 50)
+        import random
+        sampled_questions = random.sample(questions, min(50, len(questions)))
+        
+        # Don't return correct answers to students
+        for q in sampled_questions:
+            q.pop('correct_answer', None)
+        
+        return sampled_questions
+    except Exception as e:
+        logger.error(f"Error getting exam questions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get exam questions")
 
 @api_router.delete("/admin/questions/{question_id}")
 async def delete_question(question_id: str):
-    result = await db.questions.delete_one({"id": question_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Question not found")
-    return {"message": "Question deleted successfully"}
+    try:
+        result = supabase.table('questions').delete().eq('id', question_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Question not found")
+        
+        return {"message": "Question deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting question: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete question")
 
 # Exam Logging Routes
 @api_router.post("/exam/logs", response_model=ExamLog)
 async def create_exam_log(log: ExamLogCreate):
-    log_obj = ExamLog(**log.dict())
-    await db.exam_logs.insert_one(log_obj.dict())
-    return log_obj
+    try:
+        log_obj = ExamLog(**log.dict())
+        log_data = log_obj.dict()
+        log_data['timestamp'] = log_data['timestamp'].isoformat()
+        
+        supabase.table('exam_logs').insert(log_data).execute()
+        return log_obj
+    except Exception as e:
+        logger.error(f"Error creating exam log: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create exam log")
 
 @api_router.get("/admin/logs", response_model=List[ExamLog])
 async def get_exam_logs():
-    logs = await db.exam_logs.find().sort("timestamp", -1).to_list(1000)
-    return [ExamLog(**log) for log in logs]
+    try:
+        result = supabase.table('exam_logs').select('*').order('timestamp', desc=True).execute()
+        logs = []
+        for item in result.data:
+            item['timestamp'] = datetime.fromisoformat(item['timestamp'].replace('Z', '+00:00'))
+            logs.append(ExamLog(**item))
+        return logs
+    except Exception as e:
+        logger.error(f"Error getting exam logs: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get exam logs")
 
 # Device Check Routes
 @api_router.post("/device/check", response_model=DeviceCheckResult)
 async def device_check(check_data: DeviceCheckResult):
-    # Store device check result
-    await db.device_checks.insert_one(check_data.dict())
-    return check_data
+    try:
+        check_dict = check_data.dict()
+        check_dict['check_timestamp'] = check_dict['check_timestamp'].isoformat()
+        
+        supabase.table('device_checks').insert(check_dict).execute()
+        return check_data
+    except Exception as e:
+        logger.error(f"Error storing device check: {e}")
+        raise HTTPException(status_code=500, detail="Failed to store device check")
 
 @api_router.get("/admin/device-checks")
 async def get_device_checks():
-    checks = await db.device_checks.find().sort("check_timestamp", -1).to_list(100)
-    # Remove MongoDB _id field to avoid serialization issues
-    for check in checks:
-        check.pop('_id', None)
-    return checks
+    try:
+        result = supabase.table('device_checks').select('*').order('check_timestamp', desc=True).limit(100).execute()
+        
+        # Convert timestamp strings back to datetime objects for consistency
+        for check in result.data:
+            check['check_timestamp'] = datetime.fromisoformat(check['check_timestamp'].replace('Z', '+00:00'))
+        
+        return result.data
+    except Exception as e:
+        logger.error(f"Error getting device checks: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get device checks")
 
 # Video upload endpoint (commented out - ready for implementation)
 """
@@ -242,7 +340,9 @@ async def upload_video_chunk(
             file_name=file_name
         )
         
-        await db.video_uploads.insert_one(video_log.dict())
+        video_data = video_log.dict()
+        video_data['timestamp'] = video_data['timestamp'].isoformat()
+        supabase.table('video_uploads').insert(video_data).execute()
         
         return {
             "message": "Video chunk uploaded successfully",
@@ -277,6 +377,4 @@ logger = logging.getLogger(__name__)
 async def startup_event():
     await init_default_admin()
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Note: No shutdown event needed for Supabase as it handles connections automatically
