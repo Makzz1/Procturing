@@ -282,10 +282,10 @@ class ExamPlatformTester:
             self.log_result("Fetch Device Checks", False, f"Exception: {str(e)}")
     
     def test_speech_detection_with_speech(self):
-        """Test 6a: Speech Detection - Test with synthetic speech audio"""
+        """Test 6a: Speech Detection - Test with human speech audio"""
         try:
-            # Test with synthetic speech audio
-            audio_file_path = "/app/test_audio/synthetic_speech.wav"
+            # Test with espeak-generated human speech audio
+            audio_file_path = "/app/test_audio/human_speech.wav"
             
             if not os.path.exists(audio_file_path):
                 self.log_result("Speech Detection (With Speech)", False, f"Test audio file not found: {audio_file_path}")
