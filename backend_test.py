@@ -84,11 +84,13 @@ class ExamPlatformTester:
             
             if response.status_code == 200:
                 data = response.json()
-                if "token" in data and "message" in data:
-                    self.admin_token = data["token"]
-                    self.log_result("Admin Authentication", True, f"Token received: {data['message']}")
+                if "access_token" in data and "token_type" in data:
+                    self.admin_token = data["access_token"]
+                    # Set authorization header for future requests
+                    self.session.headers.update({"Authorization": f"Bearer {self.admin_token}"})
+                    self.log_result("Admin Authentication", True, f"Token received successfully")
                 else:
-                    self.log_result("Admin Authentication", False, f"Missing token or message in response: {data}")
+                    self.log_result("Admin Authentication", False, f"Missing token or token_type in response: {data}")
             else:
                 self.log_result("Admin Authentication", False, f"Status: {response.status_code}, Response: {response.text}")
         except Exception as e:
