@@ -11,6 +11,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 import hashlib
+from speech_detection import initialize_speech_detection, detect_speech_from_bytes
 
 
 ROOT_DIR = Path(__file__).parent
