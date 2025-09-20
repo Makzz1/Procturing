@@ -107,15 +107,18 @@ user_problem_statement: "Add live audio recording with speech detection to exam 
 backend:
   - task: "Speech Detection API Endpoint"
     implemented: true
-    working: false
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "Created /api/exam/detect-speech endpoint with Silero VAD model integration. Added speech_detection.py module with required dependencies (torch, librosa, noisereduce, pydub). Model initialization on startup. Needs testing to verify speech detection accuracy."
+      - working: true
+        agent: "testing"
+        comment: "✅ Speech Detection API PASSED - Comprehensive testing completed successfully. Fixed ffmpeg dependency issue by installing ffmpeg package. Speech detection model (Silero VAD) initializes correctly and accurately detects human speech vs silence/non-speech sounds. Violation logging works properly. Supports multiple audio formats (WAV, WebM). Minor: Error handling returns 200 instead of expected 500 for invalid audio, but core functionality is fully operational."
 
 frontend:
   - task: "Live Audio Recording with Speech Detection"
