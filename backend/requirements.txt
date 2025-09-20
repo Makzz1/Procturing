@@ -85,3 +85,4 @@ noisereduce==3.0.0
 pydub==0.25.1
 numpy==2.3.3
 setuptools
+torchaudio
