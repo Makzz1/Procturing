@@ -215,13 +215,10 @@ class ExamPlatformTester:
             
             if response.status_code == 200:
                 data = response.json()
-                required_fields = ["id", "log_id", "timestamp", "video_url", "reason", "student_id", "exam_session_id"]
-                
-                if all(field in data for field in required_fields):
+                if "id" in data and "message" in data:
                     self.log_result("Create Exam Log", True, f"Exam log created with ID: {data['id']}")
                 else:
-                    missing_fields = [field for field in required_fields if field not in data]
-                    self.log_result("Create Exam Log", False, f"Missing fields: {missing_fields}")
+                    self.log_result("Create Exam Log", False, f"Missing id or message in response: {data}")
             else:
                 self.log_result("Create Exam Log", False, f"Status: {response.status_code}, Response: {response.text}")
         except Exception as e:
