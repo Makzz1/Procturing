@@ -725,6 +725,47 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
     }
   };
 
+  // Function to show speech detection popup
+  const showSpeechDetectedPopup = () => {
+    // Create and show popup
+    const popup = document.createElement('div');
+    popup.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #ff4444;
+      color: white;
+      padding: 20px 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      z-index: 10000;
+      font-size: 18px;
+      font-weight: bold;
+      text-align: center;
+      border: 3px solid #cc0000;
+    `;
+    popup.innerHTML = `
+      <div style="margin-bottom: 10px;">⚠️ SPEECH DETECTED ⚠️</div>
+      <div style="font-size: 14px; font-weight: normal;">
+        Talking is not allowed during the exam.<br>
+        This violation has been logged.
+      </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Auto-remove popup after 5 seconds
+    setTimeout(() => {
+      if (document.body.contains(popup)) {
+        document.body.removeChild(popup);
+      }
+    }, 5000);
+    
+    // Also log to console
+    console.log('🚨 SPEECH DETECTION POPUP SHOWN');
+  };
+
   // Function to upload audio chunks to backend and check for speech
   const uploadAudioChunk = async (audioBlob) => {
     try {
