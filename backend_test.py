@@ -281,6 +281,238 @@ class ExamPlatformTester:
         except Exception as e:
             self.log_result("Fetch Device Checks", False, f"Exception: {str(e)}")
     
+    def test_speech_detection_with_speech(self):
+        """Test 6a: Speech Detection - Test with synthetic speech audio"""
+        try:
+            # Test with synthetic speech audio
+            audio_file_path = "/app/test_audio/synthetic_speech.wav"
+            
+            if not os.path.exists(audio_file_path):
+                self.log_result("Speech Detection (With Speech)", False, f"Test audio file not found: {audio_file_path}")
+                return
+            
+            with open(audio_file_path, 'rb') as audio_file:
+                files = {'audio': ('synthetic_speech.wav', audio_file, 'audio/wav')}
+                data = {
+                    'student_id': 'test_student_001',
+                    'exam_session_id': 'test_session_001',
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }
+                
+                response = self.session.post(f"{API_URL}/exam/detect-speech", files=files, data=data)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    required_fields = ["speech_detected", "timestamp", "message"]
+                    
+                    if all(field in result for field in required_fields):
+                        if result["speech_detected"] == True:
+                            self.log_result("Speech Detection (With Speech)", True, f"Correctly detected speech: {result['message']}")
+                        else:
+                            self.log_result("Speech Detection (With Speech)", False, f"Failed to detect speech in synthetic audio: {result['message']}")
+                    else:
+                        missing_fields = [field for field in required_fields if field not in result]
+                        self.log_result("Speech Detection (With Speech)", False, f"Missing fields in response: {missing_fields}")
+                else:
+                    self.log_result("Speech Detection (With Speech)", False, f"Status: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            self.log_result("Speech Detection (With Speech)", False, f"Exception: {str(e)}")
+    
+    def test_speech_detection_with_silence(self):
+        """Test 6b: Speech Detection - Test with silence audio"""
+        try:
+            # Test with pure silence audio
+            audio_file_path = "/app/test_audio/pure_silence.wav"
+            
+            if not os.path.exists(audio_file_path):
+                self.log_result("Speech Detection (With Silence)", False, f"Test audio file not found: {audio_file_path}")
+                return
+            
+            with open(audio_file_path, 'rb') as audio_file:
+                files = {'audio': ('pure_silence.wav', audio_file, 'audio/wav')}
+                data = {
+                    'student_id': 'test_student_002',
+                    'exam_session_id': 'test_session_002',
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }
+                
+                response = self.session.post(f"{API_URL}/exam/detect-speech", files=files, data=data)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    required_fields = ["speech_detected", "timestamp", "message"]
+                    
+                    if all(field in result for field in required_fields):
+                        if result["speech_detected"] == False:
+                            self.log_result("Speech Detection (With Silence)", True, f"Correctly detected no speech: {result['message']}")
+                        else:
+                            self.log_result("Speech Detection (With Silence)", False, f"Incorrectly detected speech in silence: {result['message']}")
+                    else:
+                        missing_fields = [field for field in required_fields if field not in result]
+                        self.log_result("Speech Detection (With Silence)", False, f"Missing fields in response: {missing_fields}")
+                else:
+                    self.log_result("Speech Detection (With Silence)", False, f"Status: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            self.log_result("Speech Detection (With Silence)", False, f"Exception: {str(e)}")
+    
+    def test_speech_detection_with_non_speech_sound(self):
+        """Test 6c: Speech Detection - Test with non-speech sound (sine wave)"""
+        try:
+            # Test with sine wave (non-speech sound)
+            audio_file_path = "/app/test_audio/silence_test.wav"
+            
+            if not os.path.exists(audio_file_path):
+                self.log_result("Speech Detection (With Non-Speech)", False, f"Test audio file not found: {audio_file_path}")
+                return
+            
+            with open(audio_file_path, 'rb') as audio_file:
+                files = {'audio': ('silence_test.wav', audio_file, 'audio/wav')}
+                data = {
+                    'student_id': 'test_student_003',
+                    'exam_session_id': 'test_session_003',
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }
+                
+                response = self.session.post(f"{API_URL}/exam/detect-speech", files=files, data=data)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    required_fields = ["speech_detected", "timestamp", "message"]
+                    
+                    if all(field in result for field in required_fields):
+                        # Sine wave should not be detected as human speech due to voicing check
+                        if result["speech_detected"] == False:
+                            self.log_result("Speech Detection (With Non-Speech)", True, f"Correctly rejected non-speech sound: {result['message']}")
+                        else:
+                            self.log_result("Speech Detection (With Non-Speech)", False, f"Incorrectly detected speech in sine wave: {result['message']}")
+                    else:
+                        missing_fields = [field for field in required_fields if field not in result]
+                        self.log_result("Speech Detection (With Non-Speech)", False, f"Missing fields in response: {missing_fields}")
+                else:
+                    self.log_result("Speech Detection (With Non-Speech)", False, f"Status: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            self.log_result("Speech Detection (With Non-Speech)", False, f"Exception: {str(e)}")
+    
+    def test_speech_detection_violation_logging(self):
+        """Test 6d: Speech Detection - Verify speech violations are logged in exam_logs"""
+        try:
+            # Get current log count
+            logs_before_response = self.session.get(f"{API_URL}/admin/logs")
+            logs_before_count = len(logs_before_response.json()) if logs_before_response.status_code == 200 else 0
+            
+            # Test with synthetic speech audio to trigger violation logging
+            audio_file_path = "/app/test_audio/synthetic_speech.wav"
+            
+            if not os.path.exists(audio_file_path):
+                self.log_result("Speech Detection Violation Logging", False, f"Test audio file not found: {audio_file_path}")
+                return
+            
+            with open(audio_file_path, 'rb') as audio_file:
+                files = {'audio': ('synthetic_speech.wav', audio_file, 'audio/wav')}
+                data = {
+                    'student_id': 'test_student_violation',
+                    'exam_session_id': 'test_session_violation',
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }
+                
+                response = self.session.post(f"{API_URL}/exam/detect-speech", files=files, data=data)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    if result.get("speech_detected") == True:
+                        # Check if violation was logged
+                        logs_after_response = self.session.get(f"{API_URL}/admin/logs")
+                        
+                        if logs_after_response.status_code == 200:
+                            logs_after = logs_after_response.json()
+                            logs_after_count = len(logs_after)
+                            
+                            if logs_after_count > logs_before_count:
+                                # Find the speech violation log
+                                speech_violation_log = None
+                                for log in logs_after:
+                                    if "SPEECH_DETECTED" in log.get("reason", ""):
+                                        speech_violation_log = log
+                                        break
+                                
+                                if speech_violation_log:
+                                    self.log_result("Speech Detection Violation Logging", True, f"Speech violation properly logged: {speech_violation_log['reason']}")
+                                else:
+                                    self.log_result("Speech Detection Violation Logging", False, "No speech violation log found in exam logs")
+                            else:
+                                self.log_result("Speech Detection Violation Logging", False, f"No new logs created (before: {logs_before_count}, after: {logs_after_count})")
+                        else:
+                            self.log_result("Speech Detection Violation Logging", False, f"Failed to fetch logs after speech detection: {logs_after_response.status_code}")
+                    else:
+                        self.log_result("Speech Detection Violation Logging", False, "Speech not detected, cannot test violation logging")
+                else:
+                    self.log_result("Speech Detection Violation Logging", False, f"Speech detection failed: {response.status_code}, {response.text}")
+        except Exception as e:
+            self.log_result("Speech Detection Violation Logging", False, f"Exception: {str(e)}")
+    
+    def test_speech_detection_error_handling(self):
+        """Test 6e: Speech Detection - Test error handling with invalid audio"""
+        try:
+            # Test with invalid audio data
+            invalid_audio_data = b"This is not audio data"
+            files = {'audio': ('invalid.wav', io.BytesIO(invalid_audio_data), 'audio/wav')}
+            data = {
+                'student_id': 'test_student_error',
+                'exam_session_id': 'test_session_error',
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+            
+            response = self.session.post(f"{API_URL}/exam/detect-speech", files=files, data=data)
+            
+            # Should return 500 error for invalid audio
+            if response.status_code == 500:
+                error_response = response.json()
+                if "detail" in error_response and "Speech detection failed" in error_response["detail"]:
+                    self.log_result("Speech Detection Error Handling", True, f"Properly handled invalid audio: {error_response['detail']}")
+                else:
+                    self.log_result("Speech Detection Error Handling", False, f"Unexpected error response: {error_response}")
+            else:
+                self.log_result("Speech Detection Error Handling", False, f"Expected 500 error, got: {response.status_code}")
+        except Exception as e:
+            self.log_result("Speech Detection Error Handling", False, f"Exception: {str(e)}")
+    
+    def test_speech_detection_different_formats(self):
+        """Test 6f: Speech Detection - Test with different audio formats"""
+        try:
+            # Create a webm format test file
+            webm_file_path = "/app/test_audio/test_audio.webm"
+            
+            # Convert wav to webm using ffmpeg
+            result = subprocess.run([
+                'ffmpeg', '-i', '/app/test_audio/synthetic_speech.wav', 
+                '-c:a', 'libopus', '-y', webm_file_path
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0 and os.path.exists(webm_file_path):
+                with open(webm_file_path, 'rb') as audio_file:
+                    files = {'audio': ('test_audio.webm', audio_file, 'audio/webm')}
+                    data = {
+                        'student_id': 'test_student_webm',
+                        'exam_session_id': 'test_session_webm',
+                        'timestamp': datetime.now(timezone.utc).isoformat()
+                    }
+                    
+                    response = self.session.post(f"{API_URL}/exam/detect-speech", files=files, data=data)
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        if "speech_detected" in result and "message" in result:
+                            self.log_result("Speech Detection Different Formats", True, f"WebM format processed successfully: {result['message']}")
+                        else:
+                            self.log_result("Speech Detection Different Formats", False, f"Invalid response format: {result}")
+                    else:
+                        self.log_result("Speech Detection Different Formats", False, f"WebM processing failed: {response.status_code}, {response.text}")
+            else:
+                self.log_result("Speech Detection Different Formats", False, f"Failed to create WebM test file: {result.stderr}")
+        except Exception as e:
+            self.log_result("Speech Detection Different Formats", False, f"Exception: {str(e)}")
+    
     def run_all_tests(self):
         """Run all tests in sequence"""
         print("=" * 80)
