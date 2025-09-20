@@ -331,6 +331,7 @@ const DeviceCheck = ({ onCheckComplete }) => {
 // Main Exam Platform Component
 const ExamPlatform = () => {
   const [deviceCheckPassed, setDeviceCheckPassed] = useState(false);
+  const [faceCaptured, setFaceCaptured] = useState(false);
   const [examStarted, setExamStarted] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -340,6 +341,14 @@ const ExamPlatform = () => {
     // Allow proceeding even with external devices (for testing)
     // In production, you might want to enforce stricter rules
     setDeviceCheckPassed(true);
+  };
+
+  const handleFaceCaptureComplete = (success) => {
+    if (success) {
+      setFaceCaptured(true);
+    } else {
+      alert("Face capture failed. Please try again.");
+    }
   };
 
   const startExam = async () => {
@@ -376,10 +385,14 @@ const ExamPlatform = () => {
     }
   };
 
-  console.log("ExamPlatform render - deviceCheckPassed:", deviceCheckPassed, "examStarted:", examStarted, "questions:", questions.length);
+  console.log("ExamPlatform render - deviceCheckPassed:", deviceCheckPassed, "faceCaptured:", faceCaptured, "examStarted:", examStarted, "questions:", questions.length);
 
   if (!deviceCheckPassed) {
     return <DeviceCheck onCheckComplete={handleDeviceCheckComplete} />;
+  }
+
+  if (!faceCaptured) {
+    return <FaceCapture onCaptureComplete={handleFaceCaptureComplete} />;
   }
 
   if (examStarted && questions.length > 0) {
