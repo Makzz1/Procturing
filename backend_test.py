@@ -292,7 +292,7 @@ class ExamPlatformTester:
                 return
             
             with open(audio_file_path, 'rb') as audio_file:
-                files = {'audio': ('synthetic_speech.wav', audio_file, 'audio/wav')}
+                files = {'audio': ('human_speech.wav', audio_file, 'audio/wav')}
                 data = {
                     'student_id': 'test_student_001',
                     'exam_session_id': 'test_session_001',
