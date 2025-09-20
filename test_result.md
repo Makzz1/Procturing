@@ -280,7 +280,6 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Speech Detection API Endpoint"
     - "Live Audio Recording with Speech Detection"
   stuck_tasks: []
   test_all: false
