@@ -798,8 +798,17 @@ const ExamInterface = ({ questions, currentQuestion, setCurrentQuestion, answers
       }
       
     } catch (error) {
-      console.error('Failed to upload audio chunk for speech detection:', error);
+      console.error('❌ Failed to upload audio chunk for speech detection:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: `${API}/exam/detect-speech`
+      });
       logViolation("AUDIO_UPLOAD_FAILED", `Failed to upload audio: ${error.message}`);
+      
+      // Show user-friendly error message
+      alert(`Audio upload failed: ${error.message}. Please check your network connection.`);
     }
   };
 
